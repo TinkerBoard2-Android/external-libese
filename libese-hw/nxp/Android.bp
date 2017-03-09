@@ -23,5 +23,13 @@ cc_library {
     srcs: ["pn80t_spidev.c"],
     local_include_dirs: ["include"],
     shared_libs: ["liblog", "libese", "libese-teq1"],
-    export_include_dirs: ["include"]
+    export_include_dirs: ["include"],
+    target: {
+      darwin: {
+        enabled: false,
+      },
+      windows: {
+        enabled: false,
+      },
+    },
 }
