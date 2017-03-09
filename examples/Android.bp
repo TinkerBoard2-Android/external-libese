@@ -28,4 +28,13 @@ cc_binary {
     srcs: ["ese_nxp_sample.c"],
     host_supported: false,
     shared_libs: example_shared_libraries,
+
+    target: {
+      darwin: {
+        enabled: false,
+      },
+      windows: {
+        enabled: false,
+      },
+    },
 }

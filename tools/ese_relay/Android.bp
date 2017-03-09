@@ -25,6 +25,14 @@ cc_binary {
     host_supported: false,
     shared_libs: ["libese-hw-nxp-pn80t-spidev", "libese-teq1"] +
                  relay_shared_libraries,
+    target: {
+      darwin: {
+        enabled: false,
+      },
+      windows: {
+        enabled: false,
+      },
+    },
 }
 
 cc_binary {
@@ -32,4 +40,12 @@ cc_binary {
     srcs: ["ese_relay.c", "ese_relay_fake.c"],
     host_supported: true,
     shared_libs: relay_shared_libraries + ["libese-hw-fake"],
+    target: {
+      darwin: {
+        enabled: false,
+      },
+      windows: {
+        enabled: false,
+      },
+    },
 }
