@@ -31,21 +31,6 @@ cc_library {
     debug:  {
         cflags: ["-DLOG_NDEBUG=0"],
      },
-    target: {
-        android: {
-        },
-
-        darwin: {
-           enabled: false,
-        },
-
-        linux: {
-        },
-
-        windows: {
-          enabled: false,
-        },
-    },
 
     shared_libs: ["liblog"],
     export_include_dirs: ["include"],
