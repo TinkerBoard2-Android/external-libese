@@ -14,11 +14,4 @@
 // limitations under the License.
 //
 
-subdirs = [
-    "libese-sysdeps",
-    "libese",
-    "libese-teq1",
-    "libese-hw",
-    "examples",
-    "tools",
-]
+subdirs = ["libese", "libese-teq1", "libese-hw", "examples", "tools"]
