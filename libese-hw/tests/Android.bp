@@ -14,14 +14,30 @@
 // limitations under the License.
 //
 
+cc_defaults {
+    name: "libese_hw_tests_default",
+
+    multilib: {
+        lib32: {
+            suffix: "32",
+        },
+        lib64: {
+            suffix: "64",
+        },
+    },
+}
+
+test_libraries = [
+    "libese",
+    "libese-teq1",
+    "libese-hw-echo",
+    "liblog",
+]
+
 cc_test {
     name: "ese_hw_tests",
+    defaults: ["libese_tests_default"],
     srcs: ["ese_hw_echo_tests.cpp"],
     host_supported: true,
-    shared_libs: [
-        "libese",
-        "libese-teq1",
-        "libese-hw-echo",
-        "liblog",
-    ],
+    shared_libs: test_libraries,
 }
