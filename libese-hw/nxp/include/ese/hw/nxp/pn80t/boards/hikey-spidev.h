@@ -19,12 +19,6 @@
 
 static const struct NxpSpiBoard nxp_boards_hikey_spidev = {
   .dev_path = "/dev/spidev0.0",
-  .gpios = {
-    488, /* kBoardGpioEseRst = GPIO2_0 */
-    490, /* kBoardGpioEseSvddPwrReq = GPIO2_2 */
-    -1,  /* kBoardGpioNfcVen = unused */
-  },
-  .mode = 0,
-  .bits = 8,
-  .speed = 1000000L,
+  .reset_gpio = 488,   /* GPIO2_0 */
+  .svdd_pwr_req_gpio = 490, /* GPIO2_2 */
 };
