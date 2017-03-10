@@ -34,7 +34,7 @@ class EseInterfaceTest : public virtual Test {
     ASSERT_EQ(0, ese_open(&ese_, NULL));
   }
   virtual void TearDown() {
-    ASSERT_EQ(0, ese_close(&ese_));
+    ese_close(&ese_);
   }
   struct EseInterface ese_;
 };
