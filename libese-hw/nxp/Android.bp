@@ -15,21 +15,43 @@
 //
 
 cc_library {
-    name: "libese-hw-nxp-pn80t-spidev",
-    host_supported: false,
+    name: "libese-hw-nxp-pn80t-common",
     debug: {
-      cflags: ["-DLOG_NDEBUG=0"],
+        cflags: ["-DLOG_NDEBUG=0"],
     },
-    srcs: ["pn80t_spidev.c"],
-    local_include_dirs: ["include"],
+    srcs: ["pn80t/common.c"],
     shared_libs: ["liblog", "libese", "libese-teq1"],
+    local_include_dirs: ["include"],
     export_include_dirs: ["include"],
     target: {
+        darwin: {
+          enabled: false,
+        },
+    },
+}
+
+cc_defaults {
+    name: "pn80t_platform",
+    target: {
       darwin: {
-        enabled: false,
-      },
-      windows: {
-        enabled: false,
+          enabled: false,
       },
     },
+    cflags: ["-fvisibility=internal"],
+    local_include_dirs: ["include"],
+    export_include_dirs: ["include"],
+    shared_libs: ["liblog", "libese", "libese-teq1"],
+    static_libs: ["libese-hw-nxp-pn80t-common"],
+}
+
+cc_library {
+    name: "libese-hw-nxp-pn80t-spidev",
+    defaults: ["pn80t_platform"],
+    srcs: ["pn80t/linux_spidev.c"],
+}
+
+cc_library {
+    name: "libese-hw-nxp-pn80t-nq-nci",
+    defaults: ["pn80t_platform"],
+    srcs: ["pn80t/nq_nci.c"],
 }
