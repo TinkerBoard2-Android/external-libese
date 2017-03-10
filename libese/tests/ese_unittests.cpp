@@ -68,7 +68,7 @@ TEST_F(EseInterfaceTest, EseOpenOk) {
 };
 
 TEST_F(EseInterfaceTest, EseCloseNull) {
-  EXPECT_EQ(-1, ese_close(NULL));
+  ese_close(NULL);
 };
 
 TEST_F(EseInterfaceTest, EseCloseNoOp) {
@@ -79,32 +79,32 @@ TEST_F(EseInterfaceTest, EseCloseNoOp) {
     .ops = &dummy_ops
   };
   /* Will pass without an open first. */
-  EXPECT_EQ(0, ese_close(&dummy));
+  ese_close(&dummy);
 };
 
 TEST_F(EseInterfaceTest, EseCloseOk) {
   EXPECT_EQ(0, ese_open(&ese_, NULL));
-  EXPECT_EQ(0, ese_close(&ese_));
+  ese_close(&ese_);
 };
 
 TEST_F(EseInterfaceTest, EseClosePending) {
   EXPECT_EQ(0, ese_open(&ese_, NULL));
   ese_.ops->hw_transmit(&ese_, NULL, 0, 0);
-  EXPECT_EQ(-1, ese_close(&ese_));
+  ese_close(&ese_);
   EXPECT_EQ(0, ese_open(&ese_, NULL));
   ese_.ops->hw_transmit(&ese_, NULL, 0, 1);
   ese_.ops->hw_receive(&ese_, NULL, 0, 0);
-  EXPECT_EQ(-1, ese_close(&ese_));
+  ese_close(&ese_);
   EXPECT_EQ(0, ese_open(&ese_, NULL));
   ese_.ops->hw_receive(&ese_, NULL, 0, 1);
-  EXPECT_EQ(0, ese_close(&ese_));
+  ese_close(&ese_);
 };
 
 
 TEST_F(EseInterfaceTest, EseTransceiveSendNothing) {
   EXPECT_EQ(0, ese_open(&ese_, NULL));
   EXPECT_EQ(0, ese_transceive(&ese_, NULL, 0, NULL, 0));
-  EXPECT_EQ(0, ese_close(&ese_));
+  ese_close(&ese_);
 };
 
 TEST_F(EseInterfaceTest, EseTransceiveNoOps) {

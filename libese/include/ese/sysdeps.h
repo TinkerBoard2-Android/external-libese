@@ -13,18 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#ifndef ESE_PLATFORM_SYSDEPS_H__
+#define ESE_PLATFORM_SYSDEPS_H__ 1
 
-/* No guard is intentional given the definition below. */
-#include <ese/hw/nxp/spi_board.h>
+#include <stdint.h> /* uint*_t */
 
-static const struct NxpSpiBoard nxp_boards_hikey_spidev = {
-  .dev_path = "/dev/spidev0.0",
-  .gpios = {
-    488, /* kBoardGpioEseRst = GPIO2_0 */
-    490, /* kBoardGpioEseSvddPwrReq = GPIO2_2 */
-    -1,  /* kBoardGpioNfcVen = unused */
-  },
-  .mode = 0,
-  .bits = 8,
-  .speed = 1000000L,
-};
+extern void *ese_memcpy(void *__dest, const void *__src, uint64_t __n);
+extern void *ese_memset(void *__s, int __c, uint64_t __n);
+
+#endif  /* ESE_PLATFORM_SYSDEPS_H__ */

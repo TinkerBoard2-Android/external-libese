@@ -22,19 +22,17 @@
 #include <unistd.h>
 
 #include <ese/ese.h>
-/* Note, the struct could be build just as well. */
-#include <ese/hw/nxp/pn80t/boards/hikey-spidev.h>
-ESE_INCLUDE_HW(ESE_HW_NXP_PN80T_SPIDEV);
+ESE_INCLUDE_HW(ESE_HW_NXP_PN80T_NQ_NCI);
 
 /* APDU: CLA INS P1-P2 Lc Data Le */
 struct Apdu {
-  size_t length;
+  uint32_t length;
   const uint8_t *bytes;
   const char *desc;
 };
 
 struct ApduSession {
-  size_t count;
+  uint32_t count;
   const char *desc;
   const struct Apdu *apdus[];
 };
@@ -63,6 +61,10 @@ const struct ApduSession kGetCplcSession = {
         },
 };
 
+const struct ApduSession kEmptySession = {
+    .count = 0, .desc = "Empty session (cooldown only)", .apdus = {},
+};
+
 /* Define the loader service sessions here! */
 const uint8_t kSelectJcopIdentifyBytes[] = {
     0x00, 0xA4, 0x04, 0x00, 0x09, 0xA0, 0x00,
@@ -75,17 +77,18 @@ const struct Apdu kSelectJcopIdentify = {
 };
 
 const struct ApduSession *kSessions[] = {
-    &kGetCplcSession,
+    &kGetCplcSession, &kEmptySession,
 };
 
 int main() {
-  struct EseInterface ese = ESE_INITIALIZER(ESE_HW_NXP_PN80T_SPIDEV);
+  struct EseInterface ese = ESE_INITIALIZER(ESE_HW_NXP_PN80T_NQ_NCI);
+  void *ese_hw_open_data = NULL;
   size_t s = 0;
   for (; s < sizeof(kSessions) / sizeof(kSessions[0]); ++s) {
     int recvd;
-    size_t apdu_index = 0;
+    uint32_t apdu_index = 0;
     uint8_t rx_buf[1024];
-    if (ese_open(&ese, (void *)(&nxp_boards_hikey_spidev))) {
+    if (ese_open(&ese, ese_hw_open_data) < 0) {
       printf("Cannot open hw\n");
       if (ese_error(&ese))
         printf("eSE error (%d): %s\n", ese_error_code(&ese),
@@ -94,10 +97,10 @@ int main() {
     }
     printf("Running session %s\n", kSessions[s]->desc);
     for (; apdu_index < kSessions[s]->count; ++apdu_index) {
-      size_t i;
+      uint32_t i;
       const struct Apdu *apdu = kSessions[s]->apdus[apdu_index];
-      printf("Sending APDU %zu: %s\n", apdu_index, apdu->desc);
-      printf("Sending %zu bytes to card\n", apdu->length);
+      printf("Sending APDU %u: %s\n", apdu_index, apdu->desc);
+      printf("Sending %u bytes to card\n", apdu->length);
       printf("TX: ");
       for (i = 0; i < apdu->length; ++i)
         printf("%.2X ", apdu->bytes[i]);

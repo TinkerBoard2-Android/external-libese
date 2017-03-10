@@ -17,8 +17,7 @@
 #ifndef ESE_HW_API_H_
 #define ESE_HW_API_H_ 1
 
-#include <stddef.h>
-#include <stdint.h>
+#include "../../../libese-sysdeps/include/ese/sysdeps.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -28,49 +27,109 @@ extern "C" {
  * to make use of.
  */
 #define __ESE_INCLUDE_HW(name) \
-  extern const struct EseOperations * name## _ops; \
-  extern const char ** name##_errors; \
-  extern const size_t name##_errors_count
+  extern const struct EseOperations * name## _ops
 
 
 struct EseInterface;
-/* !! Note !!
- * Receive and transmit operations on SPI buses should ensure the CS
- * does not change between subsequent recieve (or transmit) calls unless
- * the |complete| argument is 1.
+
+/* ese_hw_receive_op_t: receives a buffer from the hardware.
+ * Args:
+ * - struct EseInterface *: session handle.
+ * - uint8_t *: pointer to the buffer to receive data into.
+ * - uint32_t: maximum length of the data to receive.
+ * - int: 1 or 0 indicating if it is a complete transaction. This allows the underlying
+ *       implementation to batch reads if needed by the underlying wire protocol or if
+ *       the hardware needs to be signalled explicitly.
  *
- * In practice, this should not require additional state tracking as entry
- * to each function can simply assert the CS state (even if unchanged) and
- * then check whether to unassert based on |complete|.
- *
- * Other communications backends may have different needs which may be solved
- * separately by minimally processing protocol headers.
- *
- * The other option is having a transactional view where we have an explicit
- * begin/end or claim/release.
+ * Returns:
+ * - uint32_t: bytes received.
  */
-typedef size_t (ese_hw_receive_op_t)(struct EseInterface *, uint8_t *, size_t, int);
-typedef size_t (ese_hw_transmit_op_t)(struct EseInterface *, const uint8_t *, size_t, int);
+typedef uint32_t (ese_hw_receive_op_t)(struct EseInterface *, uint8_t *, uint32_t, int);
+/* ese_hw_transmit_op_t: transmits a buffer over the hardware.
+ * Args:
+ * - struct EseInterface *: session handle.
+ * - uint8_t *: pointer to the buffer to transmit.
+ * - uint32_t: length of the data to transmit.
+ * - int: 1 or 0 indicating if it is a complete transaction.
+ *
+ * Returns:
+ * - uint32_t: bytes transmitted.
+ */
+typedef uint32_t (ese_hw_transmit_op_t)(struct EseInterface *, const uint8_t *, uint32_t, int);
+/* ese_hw_reset_op_t: resets the hardware in case of communication desynchronization.
+ * Args:
+ * - struct EseInterface *: session handle.
+ *
+ * Returns:
+ * - int: -1 on error, 0 on success.
+ */
 typedef int (ese_hw_reset_op_t)(struct EseInterface *);
-/* Implements wire protocol transceiving and will likely also then require locking. */
-typedef size_t (ese_transceive_op_t)(struct EseInterface *, const uint8_t *, size_t, uint8_t *, size_t);
-/* Returns 0 on timeout, 1 on byte seen, -1 on error. */
+/* ese_transceive_op_t:  fully contained transmission and receive operation.
+ *
+ * Must provide an implementation of the wire protocol necessary to transmit
+ * and receive an application payload to and from the eSE.  Normally, this
+ * implementation is built on the hw_{receive,transmit} operations also
+ * provided and often requires the poll operation below.
+ *
+ * Args:
+ * - struct EseInterface *: session handle.
+ * - const uint8_t *: pointer to the buffer to transmit.
+ * - uint32_t: length of the data to transmit.
+ * - uint8_t *: pointer to the buffer to receive into.
+ * - uint32_t: maximum length of the data to receive.
+ *
+ * Returns:
+ * - uint32_t: bytes received.
+ */
+typedef uint32_t (ese_transceive_op_t)(struct EseInterface *, const uint8_t *, uint32_t, uint8_t *, uint32_t);
+/* ese_poll_op_t: waits for the hardware to be ready to send data.
+ *
+ * Args:
+ * - struct EseInterface *: session handle.
+ * - uint8_t: byte to wait for. E.g., a start of frame byte.
+ * - float: time in seconds to wait.
+ * - int: whether to complete a transaction when polling іs complete.
+ *
+ * Returns:
+ * - int: On error or timeout, -1.
+ *        On success, 1 or 0 depending on if the found byte was consumed.
+ */
 typedef int (ese_poll_op_t)(struct EseInterface *, uint8_t, float, int);
+/* ese_hw_open_op_t: prepares the hardware for use.
+ *
+ * This function should prepare the hardware for use and attach
+ * any implementation specific state to the EseInterface handle such
+ * that it is accessible in the other calls.
+ *
+ * Args:
+ * - struct EseInterface *: freshly initialized session handle.
+ * - void *: implementation specific pointer from the libese client.
+ *
+ * Returns:
+ * - int: < 0 on error, 0 on success.
+ */
 typedef int (ese_open_op_t)(struct EseInterface *, void *);
-typedef int (ese_close_op_t)(struct EseInterface *);
+/* ese_hw_close_op_t: releases the hardware in use.
+ *
+ * This function should free any dynamic memory and release
+ * the claimed hardware.
+ *
+ * Args:
+ * - struct EseInterface *: freshly initialized session handle.
+ *
+ * Returns:
+ * - Nothing.
+ */
+typedef void (ese_close_op_t)(struct EseInterface *);
 
 #define __ESE_INITIALIZER(TYPE) \
 { \
   .ops = TYPE## _ops, \
-  .errors = TYPE## _errors, \
-  .errors_count = TYPE## _errors_count, \
   .pad =  { 0 }, \
 }
 
 #define __ese_init(_ptr, TYPE) {\
   _ptr->ops = TYPE## _ops; \
-  _ptr->errors = TYPE## _errors; \
-  _ptr->errors_count = TYPE## _errors_count; \
   _ptr->pad[0] = 0; \
 }
 
@@ -99,6 +158,10 @@ struct EseOperations {
 
   /* Operational options */
   const void *const opts;
+
+  /* Operation error messages. */
+  const char **errors;
+  const uint32_t errors_count;
 };
 
 /* Maximum private stack storage on the interface instance. */
@@ -106,23 +169,31 @@ struct EseOperations {
 struct EseInterface {
   const struct EseOperations * ops;
   struct {
-    int is_err;
+    bool is_err;
     int code;
     const char *message;
   } error;
-  const char **errors;
-  size_t errors_count;
   /* Reserved to avoid heap allocation requirement. */
   uint8_t pad[ESE_INTERFACE_STATE_PAD];
 };
 
+/*
+ * Provided by libese to manage exposing usable errors up the stack to the
+ * libese user.
+ */
+void ese_set_error(struct EseInterface *ese, int code);
 
-#define ESE_DEFINE_HW_ERRORS(name, ary) \
-  const char ** name##_errors = (ary); \
-  const size_t name##_errors_count = (sizeof(ary) / sizeof((ary)[0]))
+/*
+ * Global error enums.
+ */
+enum EseGlobalError {
+  kEseGlobalErrorNoTransceive = -1,
+  kEseGlobalErrorPollTimedOut = -2,
+};
 
 #define ESE_DEFINE_HW_OPS(name, obj) \
   const struct EseOperations * name##_ops = &obj
+
 
 #ifdef __cplusplus
 }  /* extern "C" */
