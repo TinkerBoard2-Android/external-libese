@@ -17,20 +17,10 @@
 #ifndef ESE_HW_NXP_SPI_BOARD_H_
 #define ESE_HW_NXP_SPI_BOARD_H_ 1
 
-typedef enum {
-  kBoardGpioEseRst = 0,
-  kBoardGpioEseSvddPwrReq,
-  kBoardGpioNfcVen,
-  kBoardGpioMax,
-} BoardGpio;
-
-/* Allow GPIO assignment and configuration to vary without a new device definition. */
 struct NxpSpiBoard {
   const char *dev_path;
-  int gpios[kBoardGpioMax];
-  uint8_t mode;
-  uint32_t bits;
-  uint32_t speed;
+  int reset_gpio;
+  int svdd_pwr_req_gpio;
 };
 
 #endif  /* ESE_HW_NXP_SPI_BOARD_H_ */

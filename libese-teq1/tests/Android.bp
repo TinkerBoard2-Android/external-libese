@@ -14,13 +14,28 @@
 // limitations under the License.
 //
 
+cc_defaults {
+    name: "libese_teq1_tests_default",
+    multilib: {
+        lib32: {
+            suffix: "32",
+        },
+        lib64: {
+            suffix: "64",
+        },
+    },
+}
+
+test_libraries = [
+    "libese",
+    "libese-teq1-private",
+    "liblog",
+]
+
 cc_test {
     name: "ese_teq1_unittests",
+    defaults: ["libese_teq1_tests_default"],
     srcs: ["teq1_unittests.cpp"],
     host_supported: true,
-    shared_libs: [
-        "libese",
-        "libese-teq1-private",
-        "liblog",
-    ],
+    shared_libs: test_libraries,
 }

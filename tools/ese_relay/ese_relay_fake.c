@@ -24,4 +24,7 @@ const uint8_t kAtr[] = {0x00, 0x00};
 const size_t kAtrLength = sizeof(kAtr);
 const void *kEseOpenData = NULL;
 
-void ese_relay_init(struct EseInterface *ese) { ese_init(ese, ESE_HW_FAKE); }
+void ese_relay_init(struct EseInterface *ese) {
+  const struct EseInterface kInterface = ESE_INITIALIZER(ESE_HW_FAKE);
+  memcpy(ese, &kInterface, sizeof(kInterface));
+}
