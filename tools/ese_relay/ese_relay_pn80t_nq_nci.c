@@ -14,17 +14,21 @@
  * limitations under the License.
  */
 
-/* No guard is intentional given the definition below. */
-#include <ese/hw/nxp/spi_board.h>
+/* Pull in NXP PN80T for use in the relay. */
+#include <ese/ese.h>
+ESE_INCLUDE_HW(ESE_HW_NXP_PN80T_NQ_NCI);
 
-static const struct NxpSpiBoard nxp_boards_hikey_spidev = {
-  .dev_path = "/dev/spidev0.0",
-  .gpios = {
-    488, /* kBoardGpioEseRst = GPIO2_0 */
-    490, /* kBoardGpioEseSvddPwrReq = GPIO2_2 */
-    -1,  /* kBoardGpioNfcVen = unused */
-  },
-  .mode = 0,
-  .bits = 8,
-  .speed = 1000000L,
+/* From
+ * http://stackoverflow.com/questions/27074551/how-to-list-applets-on-jcop-cards
+ */
+static const uint8_t kAtrBytes[] = {
+    0x3B, 0xF8, 0x13, 0x00, 0x00, 0x81, 0x31, 0xFE, 0x45,
+    0x4A, 0x43, 0x4F, 0x50, 0x76, 0x32, 0x34, 0x31, 0xB7,
 };
+const uint8_t *kAtr = &kAtrBytes[0];
+const size_t kAtrLength = sizeof(kAtr);
+const void *kEseOpenData = NULL;
+
+void ese_relay_init(struct EseInterface *ese) {
+  ese_init(ese, ESE_HW_NXP_PN80T_NQ_NCI);
+}
