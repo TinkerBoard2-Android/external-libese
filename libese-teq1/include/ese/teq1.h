@@ -21,20 +21,22 @@
 extern "C" {
 #endif
 
-#include <ese/ese.h>
+#include "../../../libese/include/ese/ese.h"
+#include "../../../libese/include/ese/bit_spec.h"
 
-/* Reserved codes for T=1 devices. */
-#define TEQ1_ERROR_HARD_FAIL 0
-#define TEQ1_ERROR_ABORT 1
-#define TEQ1_ERROR_DEVICE_RESET 2
-
+/* Reserved codes for T=1 devices in EseOperation­>errors. */
+enum Teq1Error {
+ kTeq1ErrorHardFail = 0,
+ kTeq1ErrorAbort,
+ kTeq1ErrorDeviceReset,
+ kTeq1ErrorMax,
+};
 
 enum pcb_type {
   kPcbTypeInfo0 = 0x0,
   kPcbTypeInfo1 = 0x1,
   kPcbTypeReceiveReady = 0x2,
   kPcbTypeSupervisory = 0x3,
-  kPcbTypeMax,
 };
 
 enum super_type {
@@ -44,54 +46,52 @@ enum super_type {
   kSuperTypeWTX = 0x3,
 };
 
-struct PCB {
-  union {
-    /* Info bits */
-    struct {
-      uint8_t reserved:5;  /* Should be 0. */
-      uint8_t more_data:1;
-      uint8_t send_seq:1;
-      uint8_t bit8:1;  /* Must be 0 for I-blocks. */
-    } I;  /* Information Block */
-    /* receive bits */
-    struct {
-      uint8_t parity_err:1;  /* char parity or redundancy code err */
-      uint8_t other_err:1;  /*  any other errors */
-      uint8_t unused_1:2;
-      uint8_t next_seq:1;  /* If the same seq as last frame, then err even if other bits are 0. */
-      uint8_t unused_0:1;
-      uint8_t pcb_type:2;  /* Always (1, 0)=2 for R */
-    } R;  /* Receive ready block */
-    struct {
-      uint8_t type:2;
-      uint8_t unused_0:3;
-      uint8_t response:1;
-      uint8_t pcb_type:2;
-    } S;  /* Supervisory block */
-    struct {
-      uint8_t data:6;
-      uint8_t type:2; /* I = 0|1, R = 2, S = 3 */
-    };  /* Bit7-8 access for block type access. */
-    /* Bitwise access */
-    struct {
-     uint8_t bit0:1;  /* lsb */
-     uint8_t bit1:1;
-     uint8_t bit2:1;
-     uint8_t bit3:1;
-     uint8_t bit4:1;
-     uint8_t bit5:1;
-     uint8_t bit6:1;
-     uint8_t bit7:1; /* msb */
-    } bits;
-    uint8_t val;
-  };
+struct PcbSpec {
+  struct bit_spec type;
+  struct bit_spec data;
+  struct {
+    struct bit_spec more_data;
+    struct bit_spec send_seq;
+  } I;
+  struct {
+    struct bit_spec parity_err;
+    struct bit_spec other_err;
+    struct bit_spec next_seq;
+  } R;
+  struct {
+    struct bit_spec type;
+    struct bit_spec response;
+  } S;
+};
+
+const static struct PcbSpec PCB = {
+  .type = { .value = 3, .shift = 6, },
+  .data = { .value = 63, .shift = 0, },
+  .I = {
+    .more_data = { .value = 1, .shift = 5, },
+    .send_seq = { .value = 1, .shift = 6, },
+  },
+  .R = {
+    /* char parity or redundancy code err */
+    .parity_err = { .value = 1, .shift = 0, },
+    /* any other errors */
+    .other_err = { .value = 1, .shift = 1, },
+    /* If the same seq as last frame, then err even if other bits are 0. */
+    .next_seq = { .value = 1, .shift = 4, },
+  },
+  .S = {
+    .type = { .value = 3, .shift = 0, },
+    .response = { .value = 1, .shift = 5, },
+  },
 };
 
 struct Teq1Header {
   uint8_t NAD;
-  struct PCB PCB;
+  uint8_t PCB;
   uint8_t LEN;
-} __attribute__((packed));
+};
+#define TEQ1HEADER_SIZE 3
+#define TEQ1FRAME_SIZE INF_LEN + 1 + TEQ1HEADER_SIZE
 
 #define INF_LEN 254
 #define IFSC 254
@@ -103,10 +103,10 @@ struct Teq1Frame {
       union {
         uint8_t INF[INF_LEN + 1]; /* Up to 254 with trailing LRC byte. */
       };
-      /* uint8_t LRC;  If CRC was supported, it would be uint16_t. */
+      /* If CRC was supported, it would be uint16_t. */
     };
   };
-} __attribute__((packed));
+};
 
 
 /*
@@ -122,6 +122,7 @@ struct Teq1CardState {
     uint8_t seq_bits;
   } seq;
 };
+
 /* Set "last sent" to 1 so we start at 0. */
 #define TEQ1_INIT_CARD_STATE(CARD) \
   (CARD)->seq.card = 1; \
@@ -146,7 +147,11 @@ struct Teq1ProtocolOptions {
   teq1_protocol_preprocess_op_t *preprocess;
 };
 
+/* PCB bits */
+#define kTeq1PcbType (3 << 6)
+
 /* I-block bits */
+#define kTeq1InfoType        (0 << 6)
 #define kTeq1InfoMoreBit     (1 << 5)
 #define kTeq1InfoSeqBit      (1 << 6)
 
@@ -176,9 +181,10 @@ struct Teq1ProtocolOptions {
 #define TEQ1_S_ABORT(R) (kTeq1SuperType | ((R) << 5) | kTeq1SuperAbortBit)
 #define TEQ1_S_IFS(R) (kTeq1SuperType | ((R) << 5) | kTeq1SuperIfsBit)
 
-size_t teq1_transceive(struct EseInterface *ese,
-                       const uint8_t *const tx_buf, size_t tx_len,
-                       uint8_t *rx_buf, size_t rx_max);
+uint32_t teq1_transceive(struct EseInterface *ese,
+                         const struct Teq1ProtocolOptions *opts,
+                         const uint8_t *const tx_buf, uint32_t tx_len,
+                         uint8_t *rx_buf, uint32_t rx_max);
 
 uint8_t teq1_compute_LRC(const struct Teq1Frame *frame);
 

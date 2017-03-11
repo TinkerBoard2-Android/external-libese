@@ -19,6 +19,10 @@
 #ifndef ESE_LOG_H_
 #define ESE_LOG_H_ 1
 
+/* Uncomment when doing bring up or other messy debugging.
+ * #define LOG_NDEBUG 0
+ */
+
 #if defined(ESE_LOG_NONE) || defined(ESE_LOG_STDIO)
 #  define ESE_LOG_ANDROID 0
 #endif
