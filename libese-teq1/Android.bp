@@ -23,24 +23,24 @@ cc_library {
     local_include_dirs: ["include"],
 
     // Ensure that only explicitly exported symbols are visible.
-    cflags: ["-fvisibility=internal"],
+    cflags: ["-fvisibility=internal", "-std=c99"],
     debug: {
-      cflags: ["-DLOG_NDEBUG=0"],
+        cflags: ["-DLOG_NDEBUG=0"],
     },
-    shared_libs: ["liblog", "libese"],
+    shared_libs: ["liblog", "libese", "libese-sysdeps"],
     export_include_dirs: ["include"],
 }
 
 cc_library {
-  name: "libese-teq1-private",
-  host_supported: true,
+    name: "libese-teq1-private",
+    host_supported: true,
 
-  srcs: ["teq1.c"],
-  local_include_dirs: ["include"],
+    srcs: ["teq1.c"],
+    local_include_dirs: ["include"],
 
-  // Ensure that only explicitly exported symbols are visible.
-  shared_libs: ["liblog", "libese"],
-  export_include_dirs: ["include", "."],
+    // Ensure that only explicitly exported symbols are visible.
+    shared_libs: ["liblog", "libese", "libese-sysdeps"],
+    export_include_dirs: ["include", "."],
 }
 
 subdirs = ["tests"]

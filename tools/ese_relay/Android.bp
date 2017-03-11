@@ -14,38 +14,39 @@
 // limitations under the License.
 //
 
-relay_shared_libraries = [
-    "liblog",
-    "libese",
-]
+cc_defaults {
+    name: "ese-relay-defaults",
+    host_supported: false,
+    target: {
+        darwin: {
+            enabled: false,
+        },
+    },
+    srcs: ["ese_relay.c"],
+    shared_libs: [
+        "liblog",
+        "libese",
+    ],
+}
 
 cc_binary {
-    name: "ese-relay-pn80t",
-    srcs: ["ese_relay.c", "ese_relay_pn80t.c"],
-    host_supported: false,
-    shared_libs: ["libese-hw-nxp-pn80t-spidev", "libese-teq1"] +
-                 relay_shared_libraries,
-    target: {
-      darwin: {
-        enabled: false,
-      },
-      windows: {
-        enabled: false,
-      },
-    },
+    name: "ese-relay-pn80t-nq-nci",
+    defaults: ["ese-relay-defaults"],
+    srcs: ["ese_relay_pn80t_nq_nci.c"],
+    shared_libs: ["libese-hw-nxp-pn80t-nq-nci", "libese-teq1"],
+}
+
+cc_binary {
+    name: "ese-relay-pn80t-spidev",
+    defaults: ["ese-relay-defaults"],
+    srcs: ["ese_relay_pn80t_spidev.c"],
+    shared_libs: ["libese-hw-nxp-pn80t-spidev", "libese-teq1"],
 }
 
 cc_binary {
     name: "ese-relay-fake",
-    srcs: ["ese_relay.c", "ese_relay_fake.c"],
+    defaults: ["ese-relay-defaults"],
+    srcs: ["ese_relay_fake.c"],
+    shared_libs: ["libese-hw-fake"],
     host_supported: true,
-    shared_libs: relay_shared_libraries + ["libese-hw-fake"],
-    target: {
-      darwin: {
-        enabled: false,
-      },
-      windows: {
-        enabled: false,
-      },
-    },
 }
