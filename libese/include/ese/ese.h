@@ -17,10 +17,8 @@
 #ifndef ESE_H_
 #define ESE_H_ 1
 
-#include <stdint.h>
-#include <stdint.h>
-
 #include "ese_hw_api.h"
+#include "../../../libese-sysdeps/include/ese/sysdeps.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -68,17 +66,14 @@ struct EseInterface;
 #define ESE_INITIALIZER __ESE_INITIALIZER
 #define ESE_INCLUDE_HW __ESE_INCLUDE_HW
 
-const char *ese_name(struct EseInterface *ese);
+const char *ese_name(const struct EseInterface *ese);
 int ese_open(struct EseInterface *ese, void *hw_opts);
-int ese_close(struct EseInterface *ese);
-int ese_transceive(struct EseInterface *ese, uint8_t *const tx_buf, size_t tx_len, uint8_t *rx_buf, size_t rx_max);
+void ese_close(struct EseInterface *ese);
+int ese_transceive(struct EseInterface *ese, const uint8_t *tx_buf, uint32_t tx_len, uint8_t *rx_buf, uint32_t rx_max);
 
-int ese_error(struct EseInterface *ese);
-const char *ese_error_message(struct EseInterface *ese);
-int ese_error_code(struct EseInterface *ese);
-
-/* Called by the implementations. */
-void ese_set_error(struct EseInterface *ese, int code);
+bool ese_error(const struct EseInterface *ese);
+const char *ese_error_message(const struct EseInterface *ese);
+int ese_error_code(const struct EseInterface *ese);
 
 #ifdef __cplusplus
 }  /* extern "C" */

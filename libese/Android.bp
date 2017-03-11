@@ -23,16 +23,18 @@ cc_library {
     ],
 
     local_include_dirs: [
-       "include",
+        "include",
     ],
 
     // Ensure that only explicitly exported symbols are visible.
-    cflags: ["-fvisibility=internal"],
+    cflags: ["-fvisibility=internal", "-std=c99"],
+    // This doesn't work yet, but is good documentation for when
+    // debugging is needed.
     debug:  {
         cflags: ["-DLOG_NDEBUG=0"],
-     },
+    },
 
-    shared_libs: ["liblog"],
+    shared_libs: ["libese-sysdeps", "liblog"],
     export_include_dirs: ["include"],
 }
 

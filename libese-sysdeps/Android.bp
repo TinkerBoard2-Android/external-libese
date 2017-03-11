@@ -14,13 +14,31 @@
 // limitations under the License.
 //
 
-cc_test {
-    name: "ese_unittests",
-    srcs: ["ese_unittests.cpp", "bitspec_unittests.cpp"],
+cc_library {
+    name: "libese-sysdeps",
     host_supported: true,
-    shared_libs: [
-        "libese",
-        "libese-hw-fake",
-        "liblog",
+    srcs: [],
+    local_include_dirs: [
+        "include",
     ],
+    cflags: ["-std=c99"],
+    debug:  {
+        cflags: ["-DLOG_NDEBUG=0"],
+    },
+    target: {
+        android: {
+            srcs: ["android-sysdeps.c"],
+        },
+
+        darwin: {
+            srcs: ["darwin-sysdeps.c"],
+        },
+
+        linux: {
+            srcs: ["android-sysdeps.c"],
+        },
+    },
+
+    shared_libs: [],
+    export_include_dirs: ["include"],
 }

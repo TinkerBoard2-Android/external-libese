@@ -14,27 +14,19 @@
 // limitations under the License.
 //
 
-example_static_libraries = []
-
-example_shared_libraries = [
-    "liblog",
-    "libese",
-    "libese-teq1",
-    "libese-hw-nxp-pn80t-spidev",
-]
-
 cc_binary {
     name: "ese_nxp_sample",
     srcs: ["ese_nxp_sample.c"],
     host_supported: false,
-    shared_libs: example_shared_libraries,
-
     target: {
-      darwin: {
-        enabled: false,
-      },
-      windows: {
-        enabled: false,
-      },
+        darwin: {
+            enabled: false,
+        },
     },
+    shared_libs: [
+        "liblog",
+        "libese",
+        "libese-teq1",
+        "libese-hw-nxp-pn80t-nq-nci",
+    ],
 }
