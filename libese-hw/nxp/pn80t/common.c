@@ -127,7 +127,7 @@ int nxp_pn80t_poll(struct EseInterface *ese, uint8_t poll_for, float timeout,
      * should attempt again until after 1000usec.
      */
     if (ese->ops->hw_receive(ese, &byte, 1, complete) != 1) {
-      ALOGV("failed to read one byte");
+      ALOGE("failed to read one byte");
       ese_set_error(ese, kNxpPn80tErrorPollRead);
       return -1;
     }
@@ -143,6 +143,7 @@ int nxp_pn80t_poll(struct EseInterface *ese, uint8_t poll_for, float timeout,
                    7.0f * kTeq1Options.etu * 1000000.0f); /* s -> us */
     ALOGV("poll interval %d: no match.", intervals);
   } while (intervals-- > 0);
+  ALOGW("polling timed out.");
   return -1;
 }
 
@@ -189,10 +190,13 @@ void nxp_pn80t_close(struct EseInterface *ese) {
 
 const char *kNxpPn80tErrorMessages[] = {
     /* The first three are required by teq1_transceive use. */
-    "T=1 hard failure.", "T=1 abort.", "T=1 device reset failed.",
+    TEQ1_ERROR_MESSAGES,
     /* The rest are pn80t impl specific. */
-    "failed to read one byte", "unable to initialize platform",
-    "failed to read", "attempted to receive too much data",
-    "attempted to transfer too much data", "failed to transmit",
-    "failed to toggle reset",
+    [kNxpPn80tErrorPlatformInit] = "unable to initialize platform",
+    [kNxpPn80tErrorPollRead] = "failed to read one byte",
+    [kNxpPn80tErrorReceive] = "failed to read",
+    [kNxpPn80tErrorReceiveSize] = "attempted to receive too much data",
+    [kNxpPn80tErrorTransmitSize] = "attempted to transfer too much data",
+    [kNxpPn80tErrorTransmit] = "failed to transmit",
+    [kNxpPn80tErrorResetToggle] = "failed to toggle reset",
 };

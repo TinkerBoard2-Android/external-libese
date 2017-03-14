@@ -42,8 +42,8 @@ int nxp_pn80t_open(struct EseInterface *ese, void *board);
 
 enum NxpPn80tError {
   kNxpPn80tError = kTeq1ErrorMax,
-  kNxpPn80tErrorPollRead,
   kNxpPn80tErrorPlatformInit,
+  kNxpPn80tErrorPollRead,
   kNxpPn80tErrorResetToggle,
   kNxpPn80tErrorTransmit,
   kNxpPn80tErrorTransmitSize,
