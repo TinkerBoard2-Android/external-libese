@@ -32,6 +32,12 @@ enum Teq1Error {
  kTeq1ErrorMax,
 };
 
+/* For use in constant initializers libese-hw errors. */
+#define TEQ1_ERROR_MESSAGES \
+  [kTeq1ErrorHardFail] = "T=1 suffered hard failure", \
+  [kTeq1ErrorAbort] = "T=1 aborting due to errors", \
+  [kTeq1ErrorDeviceReset] = "T=1 unable to recover even after device reset"
+
 enum pcb_type {
   kPcbTypeInfo0 = 0x0,
   kPcbTypeInfo1 = 0x1,

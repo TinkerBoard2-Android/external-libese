@@ -248,7 +248,7 @@ uint8_t teq1_frame_error_check(struct Teq1State *state,
 
   lrc = teq1_compute_LRC(rx_frame);
   if (rx_frame->INF[rx_frame->header.LEN] != lrc) {
-    ALOGV("Invalid LRC %x instead of %x", rx_frame->INF[rx_frame->header.LEN],
+    ALOGE("Invalid LRC %x instead of %x", rx_frame->INF[rx_frame->header.LEN],
           lrc);
     return R(0, 0, 1); /* Parity error */
   }
@@ -283,7 +283,7 @@ uint8_t teq1_frame_error_check(struct Teq1State *state,
     /* I-blocks must always alternate for each endpoint. */
     if ((bs_get(PCB.I.send_seq, rx_frame->header.PCB)) ==
         state->card_state->seq.card) {
-      ALOGV("Got seq %d expected %d",
+      ALOGW("Got seq %d expected %d",
             bs_get(PCB.I.send_seq, rx_frame->header.PCB),
             state->card_state->seq.card);
       return R(0, 1, 0);
@@ -309,7 +309,7 @@ enum RuleResult teq1_rules(struct Teq1State *state, struct Teq1Frame *tx_frame,
   while (1) {
     /* Timeout errors come like invalid frames: 255. */
     if ((R_err = teq1_frame_error_check(state, tx_frame, rx_frame)) != 0) {
-      ALOGV("incoming frame failed the error check");
+      ALOGW("incoming frame failed the error check");
       state->last_error_message = "Invalid frame received";
       /* Mark the frame as bad for our rule evaluation. */
       txrx = TEQ1_RULE(tx_frame->header.PCB, 255);
@@ -428,7 +428,7 @@ enum RuleResult teq1_rules(struct Teq1State *state, struct Teq1Frame *tx_frame,
       next_tx->header.PCB = R_err;
       bs_assign(&next_tx->header.PCB, PCB.R.next_seq,
                 bs_get(PCB.I.send_seq, tx_frame->header.PCB));
-      ALOGV("Rule 7.1,7.5,7.6: bad rx - sending error R: %x = %s",
+      ALOGW("Rule 7.1,7.5,7.6: bad rx - sending error R: %x = %s",
             next_tx->header.PCB, teq1_pcb_to_name(next_tx->header.PCB));
       return kRuleResultSingleShot; /* So we still can retransmit the original.
                                        */
@@ -444,7 +444,7 @@ enum RuleResult teq1_rules(struct Teq1State *state, struct Teq1Frame *tx_frame,
     case TEQ1_RULE(I(1, 0), R(0, 1, 1)):
       next_tx->header.PCB =
           TEQ1_R(bs_get(PCB.I.send_seq, tx_frame->header.PCB), 0, 0);
-      ALOGV("Rule 7.1,7.5,7.6: weird rx - sending error R: %x = %s",
+      ALOGW("Rule 7.1,7.5,7.6: weird rx - sending error R: %x = %s",
             next_tx->header.PCB, teq1_pcb_to_name(next_tx->header.PCB));
       return kRuleResultSingleShot;
 
@@ -528,7 +528,7 @@ enum RuleResult teq1_rules(struct Teq1State *state, struct Teq1Frame *tx_frame,
      * send it, the caller may then switch to that state and resume.
      */
     if (rx_frame->header.PCB != 255) {
-      ALOGV("Unexpected frame. Marking error and re-evaluating.");
+      ALOGW("Unexpected frame. Marking error and re-evaluating.");
       rx_frame->header.PCB = 255;
       continue;
     }
