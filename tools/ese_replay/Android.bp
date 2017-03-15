@@ -14,4 +14,18 @@
 // limitations under the License.
 //
 
-subdirs = ["ese_relay", "ese_replay"]
+cc_binary {
+    name: "ese-replay",
+    srcs: ["main.c", "hw.c", "buffer.c", "payload.c"],
+    shared_libs: ["liblog", "libese"],
+    host_ldlibs: ["-ldl"],
+    host_supported: true,
+    target: {
+        android: {
+          shared_libs: ["libdl"],
+        },
+        darwin: {
+            enabled: false,
+        },
+    },
+}
