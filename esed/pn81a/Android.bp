@@ -14,12 +14,29 @@
 // limitations under the License.
 //
 
-subdirs = [
-    "libese-sysdeps",
-    "libese",
-    "libese-teq1",
-    "libese-hw",
-    "examples",
-    "tools",
-    "esed",
-]
+subdirs = ["tests"]
+
+cc_library_static {
+    name: "esed_pn81a_apdu",
+    srcs: [
+        "apdu.cpp",
+    ],
+    defaults: ["esed_cflags_defaults"],
+}
+
+cc_library_shared {
+    name: "esed_pn81a",
+    srcs: [
+        "pn81a.cpp",
+    ],
+    defaults: ["esed_defaults"],
+    shared_libs: [
+        "liblog",
+        "libese-hw-nxp-pn80t-nq-nci",
+        "libese-teq1",
+        "libhidltransport",
+    ],
+    static_libs: [
+        "esed_pn81a_apdu",
+    ],
+}
