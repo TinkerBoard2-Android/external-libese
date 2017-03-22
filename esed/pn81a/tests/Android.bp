@@ -14,12 +14,13 @@
 // limitations under the License.
 //
 
-subdirs = [
-    "libese-sysdeps",
-    "libese",
-    "libese-teq1",
-    "libese-hw",
-    "examples",
-    "tools",
-    "esed",
-]
+cc_test {
+    name: "esed_pn81a_apdu_test",
+    srcs: [
+        "apdu_test.cpp",
+    ],
+    defaults: ["esed_cflags_defaults"],
+    static_libs: [
+        "esed_pn81a_apdu",
+    ],
+}
