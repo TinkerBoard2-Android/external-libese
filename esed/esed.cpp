@@ -59,6 +59,7 @@ int main(int /* argc */, char** /* argv */) {
             continue;
         }
         LOG(INFO) << "Opened connection to the eSE";
+        break;
     }
 
     // This will be a single threaded daemon. This is important as libese is not
