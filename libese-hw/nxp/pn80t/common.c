@@ -150,23 +150,60 @@ int nxp_pn80t_poll(struct EseInterface *ese, uint8_t poll_for, float timeout,
 uint32_t nxp_pn80t_transceive(struct EseInterface *ese,
                               const uint8_t *const tx_buf, uint32_t tx_len,
                               uint8_t *rx_buf, uint32_t rx_len) {
-  /* TODO(wad) Should we toggle power on each call? */
   return teq1_transceive(ese, &kTeq1Options, tx_buf, tx_len, rx_buf, rx_len);
 }
 
+/* Returns the minutes needed to decrement the attack counter. */
 uint32_t nxp_pn80t_send_cooldown(struct EseInterface *ese) {
   const struct Pn80tPlatform *platform = ese->ops->opts;
-  const uint8_t kCooldown[] = {0xa5, 0xc5, 0x00, 0xc5};
-  uint8_t rx_buf[8];
-  uint32_t *res = (uint32_t *)(&rx_buf[3]);
-  ese->ops->hw_transmit(ese, kCooldown, sizeof(kCooldown), 1);
+  const static uint8_t kEndofApduSession[] = {0x5a, 0xc5, 0x00, 0xc5};
+  uint8_t rx_buf[32];
+  uint32_t bytes_read = 0;
+  uint32_t *secure_timer = NULL;
+  uint32_t *attack_counter_decrement = NULL;
+  uint32_t *restricted_mode_penalty = NULL;
+  ese->ops->hw_transmit(ese, kEndofApduSession, sizeof(kEndofApduSession), 1);
   nxp_pn80t_poll(ese, kTeq1Options.host_address, 5.0f, 0);
-  ese->ops->hw_receive(ese, rx_buf, sizeof(rx_buf), 1);
-  if (rx_buf[2] == 4) {
-    ALOGI("Cooldown value is %u", *res);
-    return *res;
-  } else {
-    ALOGI("Cooldown value unavailable");
+  bytes_read = ese->ops->hw_receive(ese, rx_buf, sizeof(rx_buf), 1);
+  ALOGI("End of APDU Session:");
+  if (bytes_read >= 0x8 && rx_buf[0] == 0xe5 && rx_buf[1] == 0x12) {
+    uint8_t *tag = &rx_buf[2];
+    while (tag < (rx_buf + bytes_read)) {
+      uint8_t *tag_len = tag + 1;
+      switch (*tag) {
+      case 0xf1:
+        if (*tag_len == 4) {
+          secure_timer = (uint32_t *)(tag + 2);
+        }
+        tag += *tag_len + 1;
+        break;
+      case 0xf2:
+        if (*tag_len == 4) {
+          attack_counter_decrement = (uint32_t *)(tag + 2);
+        }
+        tag += *tag_len + 1;
+        break;
+      case 0xf3:
+        if (*tag_len == 4) {
+          restricted_mode_penalty = (uint32_t *)(tag + 2);
+        }
+        tag += *tag_len + 1;
+        break;
+      default:
+        tag += 1;
+      }
+    }
+  }
+  if (secure_timer) {
+    ALOGI("- Secure Timer (minutes): %d", *secure_timer);
+  }
+  if (restricted_mode_penalty) {
+    ALOGI("- Restricted Mode Penalty (minutes): %d", *restricted_mode_penalty);
+  }
+  if (attack_counter_decrement) {
+    ALOGI("- Attack Counter Decrement (minutes): %d",
+          *attack_counter_decrement);
+    return *attack_counter_decrement;
   }
   return 0;
 }
@@ -174,15 +211,25 @@ uint32_t nxp_pn80t_send_cooldown(struct EseInterface *ese) {
 void nxp_pn80t_close(struct EseInterface *ese) {
   struct NxpState *ns;
   const struct Pn80tPlatform *platform = ese->ops->opts;
+  uint32_t wait_min = 0;
   ALOGV("%s: called", __func__);
   ns = NXP_PN80T_STATE(ese);
-  nxp_pn80t_send_cooldown(ese);
-  platform->toggle_reset(ns->handle, 0);
-  if (platform->toggle_power_req) {
-    platform->toggle_power_req(ns->handle, 0);
-  }
-  if (platform->toggle_ven) {
-    platform->toggle_ven(ns->handle, 0);
+  wait_min = nxp_pn80t_send_cooldown(ese);
+  /* TODO(wad): Move to the non-common code.
+   * E.g., platform->wait(ns->handle, 60000000 * wait_min);
+   * would not be practical in many cases.
+   * In practice, this should probably migrate into the kernel
+   * and into the spidev code such that each platform can handle it
+   * as needed.
+   */
+  if (!wait_min) {
+    platform->toggle_reset(ns->handle, 0);
+    if (platform->toggle_power_req) {
+      platform->toggle_power_req(ns->handle, 0);
+    }
+    if (platform->toggle_ven) {
+      platform->toggle_ven(ns->handle, 0);
+    }
   }
   platform->release(ns->handle);
   ns->handle = NULL;
