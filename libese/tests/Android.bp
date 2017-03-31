@@ -16,7 +16,11 @@
 
 cc_test {
     name: "ese_unittests",
-    srcs: ["ese_unittests.cpp", "bitspec_unittests.cpp"],
+    srcs: [
+        "ese_unittests.cpp",
+        "bitspec_unittests.cpp",
+        "sg_unittests.cpp",
+    ],
     host_supported: true,
     shared_libs: [
         "libese",
