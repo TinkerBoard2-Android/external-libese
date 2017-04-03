@@ -148,8 +148,8 @@ int nxp_pn80t_poll(struct EseInterface *ese, uint8_t poll_for, float timeout,
 }
 
 uint32_t nxp_pn80t_transceive(struct EseInterface *ese,
-                              const uint8_t *const tx_buf, uint32_t tx_len,
-                              uint8_t *rx_buf, uint32_t rx_len) {
+                              const struct EseSgBuffer *tx_buf, uint32_t tx_len,
+                              struct EseSgBuffer *rx_buf, uint32_t rx_len) {
   return teq1_transceive(ese, &kTeq1Options, tx_buf, tx_len, rx_buf, rx_len);
 }
 
