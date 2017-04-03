@@ -22,6 +22,7 @@ cc_defaults {
             enabled: false,
         },
     },
+    cflags: ["-std=c99", "-D_FORTIFY_SOURCE=2"],
     srcs: ["ese_relay.c"],
     shared_libs: [
         "liblog",
