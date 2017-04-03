@@ -17,6 +17,7 @@
 #ifndef ESE_HW_API_H_
 #define ESE_HW_API_H_ 1
 
+#include "ese_sg.h"
 #include "../../../libese-sysdeps/include/ese/sysdeps.h"
 
 #ifdef __cplusplus
@@ -64,7 +65,7 @@ typedef uint32_t (ese_hw_transmit_op_t)(struct EseInterface *, const uint8_t *, 
  * - int: -1 on error, 0 on success.
  */
 typedef int (ese_hw_reset_op_t)(struct EseInterface *);
-/* ese_transceive_op_t:  fully contained transmission and receive operation.
+/* ese_transceive_sg_op_t:  fully contained transmission and receive operation.
  *
  * Must provide an implementation of the wire protocol necessary to transmit
  * and receive an application payload to and from the eSE.  Normally, this
@@ -73,15 +74,16 @@ typedef int (ese_hw_reset_op_t)(struct EseInterface *);
  *
  * Args:
  * - struct EseInterface *: session handle.
- * - const uint8_t *: pointer to the buffer to transmit.
- * - uint32_t: length of the data to transmit.
- * - uint8_t *: pointer to the buffer to receive into.
- * - uint32_t: maximum length of the data to receive.
+ * - const EseSgBuffer *: array of buffers to transmit
+ * - uint32_t: number of buffers to send
+ * - const EseSgBuffer *: array of buffers to receive into
+ * - uint32_t: number of buffers to receive to
  *
  * Returns:
  * - uint32_t: bytes received.
  */
-typedef uint32_t (ese_transceive_op_t)(struct EseInterface *, const uint8_t *, uint32_t, uint8_t *, uint32_t);
+typedef uint32_t (ese_transceive_op_t)(
+  struct EseInterface *, const struct EseSgBuffer *, uint32_t, struct EseSgBuffer *, uint32_t);
 /* ese_poll_op_t: waits for the hardware to be ready to send data.
  *
  * Args:

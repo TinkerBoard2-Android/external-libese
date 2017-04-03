@@ -42,6 +42,7 @@ class Teq1FrameErrorCheck : public virtual Test {
  public:
   Teq1FrameErrorCheck() { }
   virtual ~Teq1FrameErrorCheck() { }
+
   struct Teq1Frame tx_frame_, rx_frame_;
   struct Teq1State state_;
   struct Teq1CardState card_state_;
@@ -92,9 +93,11 @@ class Teq1RulesTest : public virtual Test {
   Teq1RulesTest() :
     tx_data_(INF_LEN, 'A'),
     rx_data_(INF_LEN, 'B'),
+    tx_sg_({ .base = tx_data_.data(), .len = INF_LEN }),
+    rx_sg_({ .base = rx_data_.data(), .len = INF_LEN }),
     card_state_({ .seq = { .card = 1, .interface = 1, }, }),
-    state_(TEQ1_INIT_STATE(tx_data_.data(), static_cast<uint32_t>(tx_data_.size()),
-                           rx_data_.data(), static_cast<uint32_t>(rx_data_.size()),
+    state_(TEQ1_INIT_STATE(&tx_sg_, 1, INF_LEN,
+                           &rx_sg_, 1, INF_LEN,
                            &card_state_)) {
     memset(&tx_frame_, 0, sizeof(struct Teq1Frame));
     memset(&tx_next_, 0, sizeof(struct Teq1Frame));
@@ -109,6 +112,8 @@ class Teq1RulesTest : public virtual Test {
   struct Teq1Frame rx_frame_;
   std::vector<uint8_t> tx_data_;
   std::vector<uint8_t> rx_data_;
+  struct EseSgBuffer tx_sg_;
+  struct EseSgBuffer rx_sg_;
   struct Teq1CardState card_state_;
   struct Teq1State state_;
 };
@@ -125,7 +130,7 @@ class Teq1CompleteTest : public Teq1ErrorFreeTest {
     tx_frame_.header.PCB = TEQ1_I(0, 0);
     teq1_fill_info_block(&state_, &tx_frame_);
     // Check that the tx_data was fully consumed.
-    EXPECT_EQ(0UL, state_.app_data.tx_len);
+    EXPECT_EQ(0UL, state_.app_data.tx_total);
 
     rx_frame_.header.PCB = TEQ1_I(0, 0);
     rx_frame_.header.LEN = INF_LEN;
@@ -153,8 +158,8 @@ class Teq1CompleteTest : public Teq1ErrorFreeTest {
 
 TEST_F(Teq1CompleteTest, I00_I00_empty) {
   // No data.
-  state_.app_data.tx_len = 0;
-  state_.app_data.rx_len = 0;
+  state_.app_data.tx_total = 0;
+  state_.app_data.rx_total = 0;
   // Re-zero the prepared frames.
   teq1_fill_info_block(&state_, &tx_frame_);
   rx_frame_.header.LEN = 0;
@@ -166,7 +171,7 @@ TEST_F(Teq1CompleteTest, I00_I00_empty) {
 TEST_F(Teq1CompleteTest, I00_I00_data) {
   RunRules();
   // Ensure that the rx_frame data was copied out to rx_data.
-  EXPECT_EQ(0UL, state_.app_data.rx_len);
+  EXPECT_EQ(0UL, state_.app_data.rx_total);
   EXPECT_EQ(tx_data_, rx_data_);
 };
 
@@ -177,7 +182,7 @@ TEST_F(Teq1CompleteTest, I10_I10_data) {
   RunRules();
   // Ensure that the rx_frame data was copied out to rx_data.
   EXPECT_EQ(INF_LEN, rx_frame_.header.LEN);
-  EXPECT_EQ(0UL, state_.app_data.rx_len);
+  EXPECT_EQ(0UL, state_.app_data.rx_total);
   EXPECT_EQ(tx_data_, rx_data_);
 };
 
@@ -187,7 +192,7 @@ TEST_F(Teq1ErrorFreeTest, I00_WTX0_WTX1_data) {
   tx_frame_.header.PCB = TEQ1_I(0, 0);
   teq1_fill_info_block(&state_, &tx_frame_);
   // Check that the tx_data was fully consumed.
-  EXPECT_EQ(0UL, state_.app_data.tx_len);
+  EXPECT_EQ(0UL, state_.app_data.tx_total);
 
   rx_frame_.header.PCB = TEQ1_S_WTX(0);
   rx_frame_.header.LEN = 1;
@@ -216,15 +221,16 @@ TEST_F(Teq1ErrorFreeTest, I00_WTX0_WTX1_data) {
 class Teq1ErrorFreeChainingTest : public Teq1ErrorFreeTest {
  public:
   virtual void RunRules() {
-    state_.app_data.tx_len = oversized_data_len_;
     tx_data_.resize(oversized_data_len_, 'C');
-    state_.app_data.tx_buf = tx_data_.data();
+    const_cast<struct EseSgBuffer *>(state_.app_data.tx)->base = tx_data_.data();
+    const_cast<struct EseSgBuffer *>(state_.app_data.tx)->len = oversized_data_len_;
+    state_.app_data.tx_total = oversized_data_len_;
     teq1_fill_info_block(&state_, &tx_frame_);
     // Ensure More bit was set.
     EXPECT_EQ(1, bs_get(PCB.I.more_data, tx_frame_.header.PCB));
     // Check that the tx_data was fully consumed.
     EXPECT_EQ(static_cast<uint32_t>(oversized_data_len_ - INF_LEN),
-              state_.app_data.tx_len);
+              state_.app_data.tx_total);
     // No one is checking the TX LRC since there is no card present.
 
     rx_frame_.header.LEN = 0;
@@ -244,9 +250,9 @@ class Teq1ErrorFreeChainingTest : public Teq1ErrorFreeTest {
     // Check that the tx_buf was drained already for the next frame.
     // ...
     EXPECT_EQ(static_cast<uint32_t>(oversized_data_len_ - (2 * INF_LEN)),
-              state_.app_data.tx_len);
+              state_.app_data.tx_total);
     // Belt and suspenders: make sure no RX buf was used.
-    EXPECT_EQ(rx_data_.size(), state_.app_data.rx_len);
+    EXPECT_EQ(rx_data_.size(), state_.app_data.rx_total);
   }
   int oversized_data_len_;
 };
@@ -287,8 +293,8 @@ class Teq1Retransmit : public Teq1ErrorHandlingTest {
  public:
   virtual void SetUp() {
     // No data.
-    state_.app_data.rx_len = 0;
-    state_.app_data.tx_len = 0;
+    state_.app_data.rx_total = 0;
+    state_.app_data.tx_total = 0;
 
     tx_frame_.header.PCB = TEQ1_I(0, 0);
     teq1_fill_info_block(&state_, &tx_frame_);
@@ -336,8 +342,8 @@ TEST_F(Teq1Retransmit, I00_R011_I00) {
 
 TEST_F(Teq1ErrorHandlingTest, I00_I00_bad_lrc) {
   // No data.
-  state_.app_data.rx_len = 0;
-  state_.app_data.tx_len = 0;
+  state_.app_data.rx_total = 0;
+  state_.app_data.tx_total = 0;
 
   tx_frame_.header.PCB = TEQ1_I(0, 0);
   teq1_fill_info_block(&state_, &tx_frame_);
