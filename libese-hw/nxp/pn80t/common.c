@@ -147,25 +147,24 @@ int nxp_pn80t_poll(struct EseInterface *ese, uint8_t poll_for, float timeout,
   return -1;
 }
 
-uint32_t nxp_pn80t_transceive(struct EseInterface *ese,
-                              const struct EseSgBuffer *tx_buf, uint32_t tx_len,
-                              struct EseSgBuffer *rx_buf, uint32_t rx_len) {
-  return teq1_transceive(ese, &kTeq1Options, tx_buf, tx_len, rx_buf, rx_len);
-}
-
 /* Returns the minutes needed to decrement the attack counter. */
-uint32_t nxp_pn80t_send_cooldown(struct EseInterface *ese) {
+uint32_t nxp_pn80t_send_cooldown(struct EseInterface *ese, bool end) {
   const struct Pn80tPlatform *platform = ese->ops->opts;
   const static uint8_t kEndofApduSession[] = {0x5a, 0xc5, 0x00, 0xc5};
+  const static uint8_t kResetSession[] = {0x5a, 0xc4, 0x00, 0xc4};
   uint8_t rx_buf[32];
   uint32_t bytes_read = 0;
   uint32_t *secure_timer = NULL;
   uint32_t *attack_counter_decrement = NULL;
   uint32_t *restricted_mode_penalty = NULL;
+  const uint8_t *message = kResetSession;
+  if (end) {
+    message = kEndofApduSession;
+  }
   ese->ops->hw_transmit(ese, kEndofApduSession, sizeof(kEndofApduSession), 1);
   nxp_pn80t_poll(ese, kTeq1Options.host_address, 5.0f, 0);
   bytes_read = ese->ops->hw_receive(ese, rx_buf, sizeof(rx_buf), 1);
-  ALOGI("End of APDU Session:");
+  ALOGI("Cooldown data:");
   if (bytes_read >= 0x8 && rx_buf[0] == 0xe5 && rx_buf[1] == 0x12) {
     uint8_t *tag = &rx_buf[2];
     while (tag < (rx_buf + bytes_read)) {
@@ -208,13 +207,66 @@ uint32_t nxp_pn80t_send_cooldown(struct EseInterface *ese) {
   return 0;
 }
 
+uint32_t nxp_pn80t_handle_interface_call(struct EseInterface *ese,
+                                         const struct EseSgBuffer *tx_buf,
+                                         uint32_t tx_len,
+                                         struct EseSgBuffer *rx_buf,
+                                         uint32_t rx_len) {
+  /* Catch proprietary, host-targeted calls FF FF 00 XX */
+  static const uint32_t kCommandLength = 4;
+  static const uint8_t kResetCommand = 0x01;
+  static const uint8_t kGpioToggleCommand = 0xe0;
+  static const uint8_t kCooldownCommand = 0xe1;
+  uint8_t buf[kCommandLength + 1];
+  uint8_t ok[2] = {0x90, 0x00};
+  /* Over-copy by one to make sure the command length matches. */
+  if (ese_sg_to_buf(tx_buf, tx_len, 0, sizeof(buf), buf) != kCommandLength) {
+    return 0;
+  }
+  if (buf[0] != 0xff || buf[1] != 0xff || buf[2] != 0x00) {
+    return 0;
+  }
+  switch (buf[3]) {
+  case kResetCommand:
+    ALOGI("interface command received: reset");
+    if (nxp_pn80t_reset(ese) < 0) {
+      /* Warning, state unchanged error. */
+      ok[0] = 0x62;
+    }
+    return ese_sg_from_buf(rx_buf, rx_len, 0, sizeof(ok), ok);
+  case kGpioToggleCommand:
+    ALOGI("interface command received: gpio toggle");
+    /* TODO - need kernel support first. */
+    return 0;
+  case kCooldownCommand:
+    ALOGI("interface command received: cooldown");
+    uint8_t reply[6] = {0, 0, 0, 0, 0x90, 0x00};
+    uint32_t cooldownMin = nxp_pn80t_send_cooldown(ese, false);
+    *(uint32_t *)(&reply[0]) = cooldownMin;
+    return ese_sg_from_buf(rx_buf, rx_len, 0, sizeof(reply), reply);
+  }
+  return 0;
+}
+
+uint32_t nxp_pn80t_transceive(struct EseInterface *ese,
+                              const struct EseSgBuffer *tx_buf, uint32_t tx_len,
+                              struct EseSgBuffer *rx_buf, uint32_t rx_len) {
+
+  uint32_t recvd =
+      nxp_pn80t_handle_interface_call(ese, tx_buf, tx_len, rx_buf, rx_len);
+  if (recvd > 0) {
+    return recvd;
+  }
+  return teq1_transceive(ese, &kTeq1Options, tx_buf, tx_len, rx_buf, rx_len);
+}
+
 void nxp_pn80t_close(struct EseInterface *ese) {
   struct NxpState *ns;
   const struct Pn80tPlatform *platform = ese->ops->opts;
   uint32_t wait_min = 0;
   ALOGV("%s: called", __func__);
   ns = NXP_PN80T_STATE(ese);
-  wait_min = nxp_pn80t_send_cooldown(ese);
+  wait_min = nxp_pn80t_send_cooldown(ese, true);
   /* TODO(wad): Move to the non-common code.
    * E.g., platform->wait(ns->handle, 60000000 * wait_min);
    * would not be practical in many cases.

@@ -14,13 +14,14 @@
 // limitations under the License.
 //
 
-subdirs = [
-    "libese-sysdeps",
-    "libese",
-    "libese-teq1",
-    "libese-hw",
-    "apps",
-    "examples",
-    "tools",
-    "esed",
-]
+cc_defaults {
+    name: "libese-app-defaults",
+    defaults: ["libese-defaults"],
+
+    // Ensure that only explicitly exported symbols are visible.
+    local_include_dirs: ["include"],
+    export_include_dirs: ["include"],
+    cflags: ["-fvisibility=internal"],
+}
+
+subdirs = ["boot"]
