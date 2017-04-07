@@ -17,6 +17,7 @@
 cc_defaults {
     name: "ese-relay-defaults",
     host_supported: false,
+    proprietary: true,
     target: {
         darwin: {
             enabled: false,

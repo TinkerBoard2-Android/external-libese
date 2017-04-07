@@ -16,6 +16,7 @@
 
 cc_defaults {
     name: "libese-app-defaults",
+    proprietary: true,
     defaults: ["libese-defaults"],
 
     // Ensure that only explicitly exported symbols are visible.
