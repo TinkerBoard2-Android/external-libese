@@ -16,7 +16,6 @@
 
 cc_library {
     name: "libese-app-boot",
-    proprietary: true,
     defaults: ["libese-app-defaults"],
     srcs: ["boot.c"],
     host_supported: true,
@@ -25,7 +24,6 @@ cc_library {
 
 cc_library {
     name: "libese-app-boot-fortest",
-    proprietary: true,
     defaults: ["libese-app-defaults"],
     srcs: ["boot.c"],
     host_supported: true,

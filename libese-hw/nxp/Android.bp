@@ -16,6 +16,7 @@
 
 cc_library {
     name: "libese-hw-nxp-pn80t-common",
+    proprietary: true,
     defaults: ["libese-defaults"],
     srcs: ["pn80t/common.c"],
     shared_libs: ["liblog", "libese", "libese-teq1"],
@@ -30,6 +31,7 @@ cc_library {
 
 cc_defaults {
     name: "pn80t_platform",
+    proprietary: true,
     defaults: ["libese-api-defaults"],
     target: {
       darwin: {
