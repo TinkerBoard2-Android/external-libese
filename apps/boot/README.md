@@ -263,7 +263,7 @@ element needs to remain powered on for a certain number of minutes.  For
 chips that support it, like the one this applet is being tested on, the cooldown
 time can be requested with a special payload to ese\_transceive():
 
-    FFFF00E1
+    FFE10000
 
 In response, a 6 byte response will contain a uint32\_t and a successfuly
 status code (90 00).  The integer indicates how many minutes the chip needs to
