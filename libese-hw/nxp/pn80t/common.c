@@ -212,7 +212,7 @@ uint32_t nxp_pn80t_handle_interface_call(struct EseInterface *ese,
                                          uint32_t tx_len,
                                          struct EseSgBuffer *rx_buf,
                                          uint32_t rx_len) {
-  /* Catch proprietary, host-targeted calls FF FF 00 XX */
+  /* Catch proprietary, host-targeted calls FF XX 00 00 */
   static const uint32_t kCommandLength = 4;
   static const uint8_t kResetCommand = 0x01;
   static const uint8_t kGpioToggleCommand = 0xe0;
@@ -223,10 +223,10 @@ uint32_t nxp_pn80t_handle_interface_call(struct EseInterface *ese,
   if (ese_sg_to_buf(tx_buf, tx_len, 0, sizeof(buf), buf) != kCommandLength) {
     return 0;
   }
-  if (buf[0] != 0xff || buf[1] != 0xff || buf[2] != 0x00) {
+  if (buf[0] != 0xff || buf[2] != 0x00 || buf[3] != 0x00) {
     return 0;
   }
-  switch (buf[3]) {
+  switch (buf[1]) {
   case kResetCommand:
     ALOGI("interface command received: reset");
     if (nxp_pn80t_reset(ese) < 0) {
