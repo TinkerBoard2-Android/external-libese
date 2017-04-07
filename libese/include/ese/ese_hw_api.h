@@ -127,43 +127,51 @@ typedef void (ese_close_op_t)(struct EseInterface *);
 #define __ESE_INITIALIZER(TYPE) \
 { \
   .ops = TYPE## _ops, \
+  .error = { \
+    .is_err = false, \
+    .code = 0, \
+    .message = NULL, \
+  }, \
   .pad =  { 0 }, \
 }
 
 #define __ese_init(_ptr, TYPE) {\
-  _ptr->ops = TYPE## _ops; \
-  _ptr->pad[0] = 0; \
+  (_ptr)->ops = TYPE## _ops; \
+  (_ptr)->pad[0] = 0; \
+  (_ptr)->error.is_err = false; \
+  (_ptr)->error.code = 0; \
+  (_ptr)->error.message = (const char *)NULL; \
 }
 
 struct EseOperations {
-  const char *const name;
+  const char *name;
   /* Used to prepare any implementation specific internal data and
    * state needed for robust communication.
    */
-  ese_open_op_t *const open;
+  ese_open_op_t *open;
   /* Used to receive raw data from the ese. */
-  ese_hw_receive_op_t *const hw_receive;
+  ese_hw_receive_op_t *hw_receive;
   /* Used to transmit raw data to the ese. */
-  ese_hw_transmit_op_t *const hw_transmit;
+  ese_hw_transmit_op_t *hw_transmit;
   /* Used to perform a power reset on the device. */
-  ese_hw_reset_op_t *const hw_reset;
+  ese_hw_reset_op_t *hw_reset;
   /* Wire-specific protocol polling for readiness. */
-  ese_poll_op_t *const poll;
+  ese_poll_op_t *poll;
   /* Wire-specific protocol for transmitting and receiving
    * application data to the eSE. By default, this may point to
    * a generic implementation, like teq1_transceive, which uses
    * the hw_* ops above.
    */
-  ese_transceive_op_t *const transceive;
+  ese_transceive_op_t *transceive;
   /* Cleans up any required state: file descriptors or heap allocations. */
-  ese_close_op_t *const close;
+  ese_close_op_t *close;
 
   /* Operational options */
-  const void *const opts;
+  const void *opts;
 
   /* Operation error messages. */
   const char **errors;
-  const uint32_t errors_count;
+  uint32_t errors_count;
 };
 
 /* Maximum private stack storage on the interface instance. */
