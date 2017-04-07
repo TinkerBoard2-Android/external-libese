@@ -17,6 +17,7 @@
 cc_defaults {
     name: "libese-defaults",
 
+    proprietary: true,
     cflags: ["-std=c99", "-D_FORTIFY_SOURCE=2"],
 
     // This doesn't work yet, but is good documentation for when

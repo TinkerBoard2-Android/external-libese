@@ -16,6 +16,7 @@
 
 cc_binary {
     name: "ese-replay",
+    proprietary: true,
     srcs: ["main.c", "hw.c", "buffer.c", "payload.c"],
     shared_libs: ["liblog", "libese"],
     host_ldlibs: ["-ldl"],
