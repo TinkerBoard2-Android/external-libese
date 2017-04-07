@@ -16,6 +16,7 @@
 
 cc_test {
     name: "ese_unittests",
+    proprietary: true,
     srcs: [
         "ese_unittests.cpp",
         "bitspec_unittests.cpp",

@@ -16,6 +16,7 @@
 
 cc_test {
     name: "ese_app_boot_tests",
+    proprietary: true,
     srcs: ["ese_app_boot_tests.cpp", "ese_operations_wrapper.cpp"],
     host_supported: true,
     cflags: ["-Wno-unused-parameter"],

@@ -16,6 +16,7 @@
 
 cc_test {
     name: "ese_teq1_unittests",
+    proprietary: true,
     srcs: ["teq1_unittests.cpp"],
     host_supported: true,
     shared_libs: [
