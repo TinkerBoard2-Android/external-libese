@@ -14,13 +14,14 @@
 // limitations under the License.
 //
 
-subdirs = [
-    "libese-sysdeps",
-    "libese",
-    "libese-teq1",
-    "libese-hw",
-    "apps",
-    "examples",
-    "tools",
-    "esed",
-]
+cc_test {
+    name: "ese_app_boot_tests",
+    srcs: ["ese_app_boot_tests.cpp", "ese_operations_wrapper.cpp"],
+    host_supported: true,
+    cflags: ["-Wno-unused-parameter"],
+    shared_libs: [
+        "libese-app-boot-fortest",
+        "libese",
+        "liblog",
+    ],
+}
