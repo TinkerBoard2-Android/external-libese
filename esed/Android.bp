@@ -18,7 +18,7 @@ subdirs = ["pn81a"]
 
 cc_defaults {
     name: "esed_cflags_defaults",
-    proprietary: true,
+    vendor: true,
     cflags: [
         "-pedantic",
         "-Wall",

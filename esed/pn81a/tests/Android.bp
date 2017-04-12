@@ -16,6 +16,7 @@
 
 cc_test {
     name: "esed_pn81a_apdu_test",
+    vendor: true,
     srcs: [
         "apdu_test.cpp",
     ],

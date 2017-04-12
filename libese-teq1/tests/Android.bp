@@ -16,8 +16,9 @@
 
 cc_test {
     name: "ese_teq1_unittests",
-    srcs: ["teq1_unittests.cpp"],
+    vendor: true,
     host_supported: true,
+    srcs: ["teq1_unittests.cpp"],
     shared_libs: [
         "libese",
         "libese-teq1-private",

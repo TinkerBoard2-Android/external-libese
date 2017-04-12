@@ -16,6 +16,7 @@
 
 cc_library {
     name: "libese-hw-nxp-pn80t-common",
+    vendor: true,
     debug: {
         cflags: ["-DLOG_NDEBUG=0"],
     },
@@ -32,6 +33,7 @@ cc_library {
 
 cc_defaults {
     name: "pn80t_platform",
+    vendor: true,
     target: {
       darwin: {
           enabled: false,
@@ -46,12 +48,14 @@ cc_defaults {
 
 cc_library {
     name: "libese-hw-nxp-pn80t-spidev",
+    vendor: true,
     defaults: ["pn80t_platform"],
     srcs: ["pn80t/linux_spidev.c"],
 }
 
 cc_library {
     name: "libese-hw-nxp-pn80t-nq-nci",
+    vendor: true,
     defaults: ["pn80t_platform"],
     srcs: ["pn80t/nq_nci.c"],
 }

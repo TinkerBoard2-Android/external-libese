@@ -16,6 +16,7 @@
 
 cc_library {
     name: "libese-hw-fake",
+    vendor: true,
     srcs: ["ese_hw_fake.c"],
     host_supported: true,
     cflags: ["-DLOG_NDEBUG=0", "-std=c99"],
@@ -24,6 +25,7 @@ cc_library {
 
 cc_library {
     name: "libese-hw-echo",
+    vendor: true,
     host_supported: true,
     srcs: ["ese_hw_echo.c"],
     cflags: ["-DLOG_NDEBUG=0", "-std=c99"],

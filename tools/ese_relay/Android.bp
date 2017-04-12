@@ -16,6 +16,7 @@
 
 cc_defaults {
     name: "ese-relay-defaults",
+    vendor: true,
     host_supported: false,
     target: {
         darwin: {
@@ -31,6 +32,7 @@ cc_defaults {
 
 cc_binary {
     name: "ese-relay-pn80t-nq-nci",
+    vendor: true,
     defaults: ["ese-relay-defaults"],
     srcs: ["ese_relay_pn80t_nq_nci.c"],
     shared_libs: ["libese-hw-nxp-pn80t-nq-nci", "libese-teq1"],
@@ -38,6 +40,7 @@ cc_binary {
 
 cc_binary {
     name: "ese-relay-pn80t-spidev",
+    vendor: true,
     defaults: ["ese-relay-defaults"],
     srcs: ["ese_relay_pn80t_spidev.c"],
     shared_libs: ["libese-hw-nxp-pn80t-spidev", "libese-teq1"],
@@ -45,6 +48,7 @@ cc_binary {
 
 cc_binary {
     name: "ese-relay-fake",
+    vendor: true,
     defaults: ["ese-relay-defaults"],
     srcs: ["ese_relay_fake.c"],
     shared_libs: ["libese-hw-fake"],

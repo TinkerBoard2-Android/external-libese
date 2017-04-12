@@ -16,6 +16,7 @@
 
 cc_library {
     name: "libese-teq1",
+    vendor: true,
     host_supported: true,
 
     srcs: ["teq1.c"],
@@ -33,6 +34,7 @@ cc_library {
 
 cc_library {
     name: "libese-teq1-private",
+    vendor: true,
     host_supported: true,
 
     srcs: ["teq1.c"],

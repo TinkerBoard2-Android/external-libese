@@ -18,6 +18,7 @@ subdirs = ["tests"]
 
 cc_library_static {
     name: "esed_pn81a_apdu",
+    vendor: true,
     srcs: [
         "apdu.cpp",
     ],
@@ -26,6 +27,7 @@ cc_library_static {
 
 cc_library_shared {
     name: "esed_pn81a",
+    vendor: true,
     srcs: [
         "pn81a.cpp",
     ],
