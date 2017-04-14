@@ -53,12 +53,18 @@
 /* From kernel/drivers/nfc/nq-nci.h */
 #define ESE_SET_PWR _IOW(0xE9, 0x02, unsigned int)
 #define ESE_GET_PWR _IOR(0xE9, 0x03, unsigned int)
+#define ESE_CLEAR_GPIO _IOW(0xE9, 0x11, unsigned int)
 
 static const char kDevicePath[] = "/dev/pn81a";
 
 struct PlatformHandle {
   int fd;
 };
+
+int platform_toggle_bootloader(void *blob, int val) {
+  const struct PlatformHandle *handle = blob;
+  return ioctl(handle->fd, ESE_CLEAR_GPIO, val);
+}
 
 int platform_toggle_reset(void *blob, int val) {
   const struct PlatformHandle *handle = blob;
@@ -171,6 +177,7 @@ static const struct Pn80tPlatform kPn80tNqNciPlatform = {
     .toggle_reset = &platform_toggle_reset,
     .toggle_ven = NULL,
     .toggle_power_req = NULL,
+    .toggle_bootloader = &platform_toggle_bootloader,
     .wait = &platform_wait,
 };
 
