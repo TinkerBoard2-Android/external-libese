@@ -213,17 +213,20 @@ uint32_t nxp_pn80t_handle_interface_call(struct EseInterface *ese,
                                          struct EseSgBuffer *rx_buf,
                                          uint32_t rx_len) {
   /* Catch proprietary, host-targeted calls FF XX 00 00 */
+  const struct Pn80tPlatform *platform = ese->ops->opts;
   static const uint32_t kCommandLength = 4;
   static const uint8_t kResetCommand = 0x01;
   static const uint8_t kGpioToggleCommand = 0xe0;
   static const uint8_t kCooldownCommand = 0xe1;
   uint8_t buf[kCommandLength + 1];
   uint8_t ok[2] = {0x90, 0x00};
+  struct NxpState *ns = NXP_PN80T_STATE(ese);
   /* Over-copy by one to make sure the command length matches. */
   if (ese_sg_to_buf(tx_buf, tx_len, 0, sizeof(buf), buf) != kCommandLength) {
     return 0;
   }
-  if (buf[0] != 0xff || buf[2] != 0x00 || buf[3] != 0x00) {
+  /* Let 3 change as an argument. */
+  if (buf[0] != 0xff || buf[2] != 0x00) {
     return 0;
   }
   switch (buf[1]) {
@@ -236,8 +239,19 @@ uint32_t nxp_pn80t_handle_interface_call(struct EseInterface *ese,
     return ese_sg_from_buf(rx_buf, rx_len, 0, sizeof(ok), ok);
   case kGpioToggleCommand:
     ALOGI("interface command received: gpio toggle");
-    /* TODO - need kernel support first. */
-    return 0;
+    if (platform->toggle_bootloader) {
+      int ret = platform->toggle_bootloader(ns->handle, buf[3]);
+      if (ret) {
+        /* Grab the bottom two bytes. */
+        ok[0] = (ret >> 8) & 0xff;
+        ok[1] = ret & 0xff;
+      }
+    } else {
+      /* Not found. */
+      ok[0] = 0x6a;
+      ok[1] = 0x82;
+    }
+    return ese_sg_from_buf(rx_buf, rx_len, 0, sizeof(ok), ok);
   case kCooldownCommand:
     ALOGI("interface command received: cooldown");
     uint8_t reply[6] = {0, 0, 0, 0, 0x90, 0x00};
