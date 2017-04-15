@@ -15,12 +15,12 @@
 //
 
 cc_test {
-    name: "esed_pn81a_apdu_test",
+    name: "libapdu_test",
     srcs: [
         "apdu_test.cpp",
     ],
-    defaults: ["esed_cflags_defaults"],
+    defaults: ["libapdu_defaults"],
     static_libs: [
-        "esed_pn81a_apdu",
+        "libapdu",
     ],
 }
