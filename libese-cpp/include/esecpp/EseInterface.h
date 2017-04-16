@@ -14,17 +14,14 @@
  * limitations under the License.
  */
 
-#ifndef ESED_LIBESE_H_
-#define ESED_LIBESE_H_
+#ifndef CPP_ESE_H_
+#define CPP_ESE_H_
 
 #include <vector>
-
-#include <android-base/logging.h>
 
 #include <ese/ese.h>
 
 namespace android {
-namespace esed {
 
 /**
  * Mockable wrapper for libese's C API.
@@ -52,15 +49,22 @@ public:
                               rx.data(), static_cast<uint32_t>(rx.size()));
     }
 
+    // TODO: overload transceive for ese_transceive_sg
+
     virtual bool error() { return ese_error(mEse); }
     virtual const char* error_message() { return ese_error_message(mEse); }
     virtual int error_code() { return ese_error_code(mEse); }
+
+    /**
+     * This is needed in order to call the applet libraries written in C. We
+     * should work out a better way to do this.
+     */
+    ::EseInterface* ese_interface() { return mEse; }
 
 protected:
     ::EseInterface* mEse;
 };
 
-} // namespace esed
 } // namespace android
 
-#endif // ESED_LIBESE_H_
+#endif // CPP_ESE_H_
