@@ -15,7 +15,7 @@
 //
 
 cc_defaults {
-    name: "esed_defaults",
+    name: "libese_cpp_defaults",
     proprietary: true,
     cflags: [
         "-pedantic",
@@ -23,28 +23,34 @@ cc_defaults {
         "-Wextra",
         "-Werror",
     ],
-    host_supported: false,
-    target: {
-        darwin: {
-            enabled: false,
-        },
-    },
 }
 
-cc_binary {
-    name: "esed",
+cc_library_headers {
+    name: "libese_cpp",
+    defaults: ["libese_cpp_defaults"],
+    export_include_dirs: ["include"],
+}
+
+cc_library_shared {
+    name: "libese_cpp_nxp_pn80t_nq_nci",
+    defaults: ["libese_cpp_defaults"],
     srcs: [
-        "esed.cpp",
+        "NxpPn80tNqNci.cpp",
     ],
-    init_rc = ["esed.rc"],
-    defaults: ["esed_defaults"],
+    export_include_dirs: ["include"],
+    header_libs: ["libese_cpp"],
     shared_libs: [
-        "libbase",
-        "libese_cpp_nxp_pn80t_nq_nci",
-        "libhidlbase",
-        "libhidltransport",
-        "libhwbinder",
-        "liblog",
-        "libutils",
+        "libese",
+	"libese-hw-nxp-pn80t-nq-nci",
     ],
+    export_shared_lib_headers: [
+        "libese",
+    ],
+    host_supported: false,
+}
+
+cc_test_library {
+    name: "libese_cpp_mock",
+    defaults: ["libese_cpp_defaults"],
+    export_include_dirs: ["tests/include"],
 }
