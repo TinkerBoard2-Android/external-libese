@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef ESED_PN81A_APDU_H_
-#define ESED_PN81A_APDU_H_
+#ifndef APDU_H_
+#define APDU_H_
 
 #include <cstddef>
 #include <cstdint>
@@ -114,4 +114,4 @@ private:
 
 } // namespace android
 
-#endif // ESED_PN81A_APDU_H_
+#endif // APDU_H_
