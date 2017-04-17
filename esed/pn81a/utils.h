@@ -22,7 +22,8 @@
 
 #include <hidl/Status.h>
 
-#include "apdu.h"
+#include <apdu/apdu.h>
+
 #include "pn81a.h"
 
 namespace android {
