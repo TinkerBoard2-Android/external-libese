@@ -14,33 +14,27 @@
  * limitations under the License.
  */
 
-#include "pn81a.h"
-
-#include <ese/ese.h>
+#include <esecpp/NxpPn80tNqNci.h>
 ESE_INCLUDE_HW(ESE_HW_NXP_PN80T_NQ_NCI);
 
 namespace android {
-namespace esed {
-namespace pn81a {
 
-void EseInterface::init() {
+void NxpPn80tNqNci::init() {
     mEse = new ::EseInterface;
     ese_init(mEse, ESE_HW_NXP_PN80T_NQ_NCI);
 }
 
-int EseInterface::open() {
-    const int ret = ese_open(mEse, NULL);
+int NxpPn80tNqNci::open() {
+    const int ret = ese_open(mEse, nullptr);
     mOpen = !(ret < 0);
     return ret;
 }
 
-void EseInterface::close() {
+void NxpPn80tNqNci::close() {
     if (mOpen) {
         ese_close(mEse);
     }
     delete mEse;
 }
 
-} // namespace pn81a
-} // namespace esed
 } // namespace android
