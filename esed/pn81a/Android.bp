@@ -14,16 +14,6 @@
 // limitations under the License.
 //
 
-subdirs = ["tests"]
-
-cc_library_static {
-    name: "esed_pn81a_apdu",
-    srcs: [
-        "apdu.cpp",
-    ],
-    defaults: ["esed_cflags_defaults"],
-}
-
 cc_library_shared {
     name: "esed_pn81a",
     srcs: [
@@ -37,6 +27,6 @@ cc_library_shared {
         "libhidltransport",
     ],
     static_libs: [
-        "esed_pn81a_apdu",
+        "libapdu",
     ],
 }

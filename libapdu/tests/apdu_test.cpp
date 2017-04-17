@@ -20,7 +20,7 @@
 
 #include <gtest/gtest.h>
 
-#include "../apdu.h"
+#include <apdu/apdu.h>
 
 using android::CommandApdu;
 using android::ResponseApdu;
