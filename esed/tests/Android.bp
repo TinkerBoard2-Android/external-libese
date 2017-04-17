@@ -14,38 +14,17 @@
 // limitations under the License.
 //
 
-subdirs = ["tests"]
-
-cc_defaults {
-    name: "esed_defaults",
+// TODO: move to a VTS test
+cc_test {
+    name: "esed_integration_tests",
     proprietary: true,
-    cflags: [
-        "-pedantic",
-        "-Wall",
-        "-Wextra",
-        "-Werror",
+    srcs: [
+        "weaver_integration_tests.cpp",
     ],
     host_supported: false,
-    target: {
-        darwin: {
-            enabled: false,
-        },
-    },
-}
-
-cc_binary {
-    name: "esed",
-    srcs: [
-        "esed.cpp",
-	"Weaver.cpp"
-    ],
-    init_rc = ["esed.rc"],
-    defaults: ["esed_defaults"],
     shared_libs: [
         "android.hardware.weaver@1.0",
         "libbase",
-        "libese_cpp_nxp_pn80t_nq_nci",
-	"libese-app-weaver",
         "libhidlbase",
         "libhidltransport",
         "libhwbinder",

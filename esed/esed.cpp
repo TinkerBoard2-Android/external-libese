@@ -26,6 +26,8 @@
 #include <esecpp/NxpPn80tNqNci.h>
 using EseInterfaceImpl = android::NxpPn80tNqNci;
 
+#include "Weaver.h"
+
 using android::OK;
 using android::sp;
 using android::status_t;
@@ -34,13 +36,16 @@ using android::hardware::joinRpcThreadpool;
 
 using namespace std::chrono_literals;
 
+// HALs
+using android::esed::Weaver;
+
 int main(int /* argc */, char** /* argv */) {
     LOG(INFO) << "Starting esed...";
 
     // Open connection to the eSE
+    EseInterfaceImpl ese;
     uint32_t failCount = 0;
     while (true) {
-        EseInterfaceImpl ese;
         ese.init();
         if (ese.open() < 0) {
             std::string errMsg = "Failed to open connection to eSE";
@@ -64,8 +69,16 @@ int main(int /* argc */, char** /* argv */) {
     // thread safe so we use binder to synchronize requests for us.
     constexpr bool thisThreadWillJoinPool = true;
     configureRpcThreadpool(1, thisThreadWillJoinPool);
+    status_t status;
 
     // -- Instantiate other applet HALs here --
+
+    // Create Weaver HAL instance
+    sp<Weaver> weaver = new Weaver{ese};
+    status = weaver->registerAsService();
+    if (status != OK) {
+        LOG(ERROR) << "Failed to register Weaver as a service (status: " << status << ")";
+    }
 
     joinRpcThreadpool();
     return -1; // Should never reach here
