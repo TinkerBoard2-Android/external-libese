@@ -17,10 +17,9 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-#include "../libese.h"
+#include <esecpp/EseInterface.h>
 
 namespace android {
-namespace esed {
 
 using ::testing::_;
 using ::testing::ContainerEq;
@@ -56,5 +55,4 @@ inline std::unique_ptr<MockEseInterface> singleCommandEseMock(
     return mockEse;
 }
 
-} // namespace esed
 } // namespace android

@@ -20,6 +20,7 @@ subdirs = [
     "examples",
     "libapdu",
     "libese",
+    "libese-cpp",
     "libese-hw",
     "libese-sysdeps",
     "libese-teq1",

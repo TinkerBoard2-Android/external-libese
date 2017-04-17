@@ -14,17 +14,15 @@
  * limitations under the License.
  */
 
-#ifndef ESED_PN81A_H_
-#define ESED_PN81A_H_
+#ifndef ESECPP_NXP_PN80T_NQ_NCI_H_
+#define ESECPP_NXP_PN80T_NQ_NCI_H_
 
-#include "../libese.h"
+#include <esecpp/EseInterface.h>
 
 namespace android {
-namespace esed {
-namespace pn81a {
 
-struct EseInterface : public ::android::esed::EseInterface {
-    ~EseInterface() { close(); }
+struct NxpPn80tNqNci : public EseInterface {
+    ~NxpPn80tNqNci() { close(); }
 
     void init() override;
     int open() override;
@@ -34,8 +32,6 @@ private:
     bool mOpen = false;
 };
 
-} // namespace pn81a
-} // namespace esed
 } // namespace android
 
-#endif // ESED_PROXY_H_
+#endif // ESECPP_NXP_PN80T_NQ_NCI_H_

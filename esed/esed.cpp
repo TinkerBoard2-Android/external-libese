@@ -22,11 +22,9 @@
 #include <hidl/HidlTransportSupport.h>
 #include <utils/StrongPointer.h>
 
-#include "libese.h"
-
 // Select the implementation
-#include "pn81a/pn81a.h"
-using EseInterfaceImpl = android::esed::pn81a::EseInterface;
+#include <esecpp/NxpPn80tNqNci.h>
+using EseInterfaceImpl = android::NxpPn80tNqNci;
 
 using android::OK;
 using android::sp;
