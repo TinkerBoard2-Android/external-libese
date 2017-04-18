@@ -33,8 +33,10 @@ int NxpPn80tNqNci::open() {
 void NxpPn80tNqNci::close() {
     if (mOpen) {
         ese_close(mEse);
+        mOpen = false;
     }
     delete mEse;
+    mEse = nullptr;
 }
 
 } // namespace android
