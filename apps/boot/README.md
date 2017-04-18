@@ -257,17 +257,20 @@ ISO7816 code from an uncaught exception or OS-level error.
 
 ##### Cooldown
 
-ESE\_APP\_RESULT\_ERROR\_COOLDOWN indicates that the secure element has
-indicated that its attack counter is high. In order to decrement it, the secure
-element needs to remain powered on for a certain number of minutes.  For
-chips that support it, like the one this applet is being tested on, the cooldown
-time can be requested with a special payload to ese\_transceive():
+ESE\_APP\_RESULT\_ERROR\_COOLDOWN indicates that the secure element needs to
+stay powered on for a period of time -- either at the end of use or before the
+requested command can be serviced.  As the behavior is implementation specific,
+the only effective option is to keep the secure element powered for the number of
+minutes specified by the response uint32\_t.
+
+For chips that support it, like the one this applet is being tested on, the
+cooldown time can be requested with a special APDU to ese\_transceive():
 
     FFE10000
 
-In response, a 6 byte response will contain a uint32\_t and a successfuly
-status code (90 00).  The integer indicates how many minutes the chip needs to
-stay powered and unused to cooldown.  If this happens before the locks or
-rollback storage can be read, the bootloader will need to determine a
-safe delay or recovery path until boot can proceed securely.
+In response, a 6 byte response will contain a uint32\_t and a successful status
+code (90 00).  The unsigned little endian integer indicates how many minutes
+the chip needs to stay powered and unused to cooldown.  If this happens before
+the locks or rollback storage can be read, the bootloader will need to
+determine a safe delay or recovery path until boot can proceed securely.
 
