@@ -79,6 +79,10 @@ public class Storage extends Applet implements ExtendedLength, Shareable {
     private final static byte INS_SET_LOCK = (byte) 0x08;
     private final static byte INS_SET_PRODUCTION = (byte) 0x0a;
     private final static byte INS_CARRIER_LOCK_TEST = (byte) 0x0c;
+    private final static byte INS_RESET = (byte) 0x0e;
+
+    private final static byte RESET_FACTORY = (byte) 0x0;
+    private final static byte RESET_LOCKS = (byte) 0x1;
 
     private final static short NO_METADATA = (short) 0;
     private final static short NO_REQ_LOCKS = (short) 0;
@@ -465,8 +469,22 @@ public class Storage extends Applet implements ExtendedLength, Shareable {
             if (numBytes != bytesRead) {
                 resp = 0x0100;
             }
-            resp = ((CarrierLock)locks[0]).testVector(buffer, cdataOffset, bytesRead);
+            resp = ((CarrierLock)locks[LOCK_CARRIER]).testVector(buffer, cdataOffset, bytesRead);
             sendResponseCode(apdu, resp);
+            return;
+        /* reset(0x0=factory 0x1=locks) {} */
+        case INS_RESET:
+            if (p1 != RESET_LOCKS) {
+              /* Not implemented */
+              resp = 0x0001;
+              sendResponseCode(apdu, resp);
+            }
+            if (globalState.production() == true) {
+              resp = 0x0100;
+              sendResponseCode(apdu, resp);
+            }
+            Util.arrayFillNonAtomic(lockStorage, (short) 0,
+                                    (short) lockStorage.length, (byte) 0x00);
             return;
         default:
             ISOException.throwIt(ISO7816.SW_INS_NOT_SUPPORTED);
