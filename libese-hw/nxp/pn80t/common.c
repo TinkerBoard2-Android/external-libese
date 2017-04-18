@@ -147,16 +147,25 @@ int nxp_pn80t_poll(struct EseInterface *ese, uint8_t poll_for, float timeout,
   return -1;
 }
 
-/* Returns the minutes needed to decrement the attack counter. */
+/* Returns the minutes the chip has requested to stay powered for internal
+ * maintenance. This is not expected during normal operation, but it is still
+ * a possible operating response.
+ *
+ * There are three timers reserved for internal state usage which are
+ * not reliable API. As such, this function returns the maximum time
+ * in minutes that the chip would like to stay powered-on.
+ */
+#define TIMER_COUNT 3
+#define TIMER_BASE 0xF0
 uint32_t nxp_pn80t_send_cooldown(struct EseInterface *ese, bool end) {
   const struct Pn80tPlatform *platform = ese->ops->opts;
   const static uint8_t kEndofApduSession[] = {0x5a, 0xc5, 0x00, 0xc5};
   const static uint8_t kResetSession[] = {0x5a, 0xc4, 0x00, 0xc4};
   uint8_t rx_buf[32];
   uint32_t bytes_read = 0;
-  uint32_t *secure_timer = NULL;
-  uint32_t *attack_counter_decrement = NULL;
-  uint32_t *restricted_mode_penalty = NULL;
+  int timer = 0;
+  uint32_t *timers[TIMER_COUNT];
+  uint32_t max_wait = 0;
   const uint8_t *message = kResetSession;
   if (end) {
     message = kEndofApduSession;
@@ -164,47 +173,31 @@ uint32_t nxp_pn80t_send_cooldown(struct EseInterface *ese, bool end) {
   ese->ops->hw_transmit(ese, kEndofApduSession, sizeof(kEndofApduSession), 1);
   nxp_pn80t_poll(ese, kTeq1Options.host_address, 5.0f, 0);
   bytes_read = ese->ops->hw_receive(ese, rx_buf, sizeof(rx_buf), 1);
-  ALOGI("Cooldown data:");
+  ALOGI("Requested power-down delay times (min):");
+  /* For each tag type, walk the response to extract the value. */
   if (bytes_read >= 0x8 && rx_buf[0] == 0xe5 && rx_buf[1] == 0x12) {
-    uint8_t *tag = &rx_buf[2];
-    while (tag < (rx_buf + bytes_read)) {
-      uint8_t *tag_len = tag + 1;
-      switch (*tag) {
-      case 0xf1:
-        if (*tag_len == 4) {
-          secure_timer = (uint32_t *)(tag + 2);
+    for (; timer < TIMER_COUNT; ++timer) {
+      timers[timer] = NULL;
+      uint8_t *tag = &rx_buf[2];
+      while (tag < (rx_buf + bytes_read)) {
+        uint8_t *tag_len = tag + 1;
+        if (*tag == (TIMER_BASE | (timer + 1))) {
+          if (*tag_len == 4) {
+            timers[timer] = (uint32_t *)(tag + 2);
+            ALOGI("- Timer 0x%.2X: %d", (TIMER_BASE | (timer + 1)),
+                  *timers[timer]);
+            if (*timers[timer] > max_wait) {
+              max_wait = *timers[timer];
+            }
+          }
+          break;
+        } else {
+          tag += 1;
         }
-        tag += *tag_len + 1;
-        break;
-      case 0xf2:
-        if (*tag_len == 4) {
-          attack_counter_decrement = (uint32_t *)(tag + 2);
-        }
-        tag += *tag_len + 1;
-        break;
-      case 0xf3:
-        if (*tag_len == 4) {
-          restricted_mode_penalty = (uint32_t *)(tag + 2);
-        }
-        tag += *tag_len + 1;
-        break;
-      default:
-        tag += 1;
       }
     }
   }
-  if (secure_timer) {
-    ALOGI("- Secure Timer (minutes): %d", *secure_timer);
-  }
-  if (restricted_mode_penalty) {
-    ALOGI("- Restricted Mode Penalty (minutes): %d", *restricted_mode_penalty);
-  }
-  if (attack_counter_decrement) {
-    ALOGI("- Attack Counter Decrement (minutes): %d",
-          *attack_counter_decrement);
-    return *attack_counter_decrement;
-  }
-  return 0;
+  return max_wait;
 }
 
 uint32_t nxp_pn80t_handle_interface_call(struct EseInterface *ese,
@@ -281,10 +274,7 @@ void nxp_pn80t_close(struct EseInterface *ese) {
   ALOGV("%s: called", __func__);
   ns = NXP_PN80T_STATE(ese);
   wait_min = nxp_pn80t_send_cooldown(ese, true);
-  /* TODO(wad): Move to the non-common code.
-   * E.g., platform->wait(ns->handle, 60000000 * wait_min);
-   * would not be practical in many cases.
-   * In practice, this should probably migrate into the kernel
+  /* In practice, this should probably migrate into the kernel
    * and into the spidev code such that each platform can handle it
    * as needed.
    */
