@@ -186,9 +186,18 @@ EseAppResult ese_boot_rollback_index_write(struct EseBootSession *session, uint8
 /**
  * Reads a uint64_t from |slot| into |value|.
  *
- * @retuns ESE_APP_RESULT_OK on success.
+ * @returns ESE_APP_RESULT_OK on success.
  */
 EseAppResult ese_boot_rollback_index_read(struct EseBootSession *session, uint8_t slot, uint64_t *value);
+
+
+/**
+ * Resets all lock state -- including internal metadata.
+ * This should only be called in factory or under test.
+ *
+ * @returns ESE_APP_RESULT_OK on success.
+ */
+EseAppResult ese_boot_reset_locks(struct EseBootSession *session);
 
 #ifdef __cplusplus
 }  /* extern "C" */
