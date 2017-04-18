@@ -101,6 +101,7 @@ bool collect_device_data(const std::string &modem_id, std::string *device_data) 
     "ro.product.model",
     NULL,
   };
+  bool collect_from_env = getenv("COLLECT_FROM_ENV") != NULL;
   uint8_t len = 0;
   const char **key = &kDeviceKeys[0];
   do {
@@ -110,12 +111,21 @@ bool collect_device_data(const std::string &modem_id, std::string *device_data) 
       device_data->append(modem_id);
     } else {
       char value[PROPERTY_VALUE_MAX];
-      if (!get_property_helper(*key, &value[0])) {
+      char *value_ptr = &value[0];
+      if (collect_from_env) {
+        // Use the last dotted value.
+        value_ptr = getenv(strrchr(*key, '.') + 1);
+        if (value_ptr == NULL) {
+          fprintf(stderr, "fake property '%s' not in env\n", 
+                  strrchr(*key, '.') + 1);
+          return false;
+        }
+      } else if (!get_property_helper(*key, value_ptr)) {
         return false;
       }
-      len = static_cast<uint8_t>(strlen(value));
+      len = static_cast<uint8_t>(strlen(value_ptr));
       device_data->push_back(len);
-      device_data->append(value);
+      device_data->append(value_ptr);
     }
     if (*++key == NULL) {
       break;
@@ -312,7 +322,11 @@ int handle_lock_state(struct EseBootSession *session, std::vector<std::string> &
         printf("Setting carrier lock with '");
         for (std::string::iterator it = device_data.begin();
              it != device_data.end(); ++it) {
-          printf("%c", isprint(*it) ? *it : '_');
+          if (isprint(*it)) {
+            printf("%c", *it);
+          } else {
+            printf("[0x%.2x]", *it);
+          }
         }
         printf("'\n");
         const uint8_t *data = reinterpret_cast<const uint8_t *>(device_data.data());
