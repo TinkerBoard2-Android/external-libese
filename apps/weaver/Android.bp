@@ -14,15 +14,9 @@
 // limitations under the License.
 //
 
-cc_defaults {
-    name: "libese-app-defaults",
-    proprietary: true,
-    defaults: ["libese-defaults"],
-
-    // Ensure that only explicitly exported symbols are visible.
-    local_include_dirs: ["include"],
-    export_include_dirs: ["include"],
-    cflags: ["-fvisibility=internal"],
+cc_library {
+    name: "libese-app-weaver",
+    defaults: ["libese-app-defaults"],
+    srcs: ["weaver.c"],
+    shared_libs: ["liblog", "libese", "libese-sysdeps"],
 }
-
-subdirs = ["boot", "weaver"]
