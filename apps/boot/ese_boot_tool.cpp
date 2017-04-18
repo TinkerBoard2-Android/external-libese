@@ -46,6 +46,7 @@ void usage(const char *prog) {
     "             boot <byte>\n"
     "             owner 0\n"
     "             owner <non-zero byte> <keyValue>\n"
+    "         reset\n"
     "    verify-key test <blob>\n"
     "    verify-key auto\n"
     "\n"
@@ -269,7 +270,9 @@ int handle_lock_state(struct EseBootSession *session, std::vector<std::string> &
   EseBootLockId lockId;
   uint16_t lockMetaLen = 0;
   uint8_t lockMeta[1024];
-  if (args[2] == "carrier") {
+  if (args[1] == "reset") {
+    // No work.
+  } else if (args[2] == "carrier") {
     lockId = kEseBootLockIdCarrier;
   } else if (args[2] == "device") {
     lockId = kEseBootLockIdDevice;
@@ -304,6 +307,16 @@ int handle_lock_state(struct EseBootSession *session, std::vector<std::string> &
     fprintf(stderr, "lock: failed to get '%s' (%.8x)\n", args[2].c_str(), res);
     handle_error(session->ese, res);
     return 2;
+  } else if (args[1] == "reset") {
+    res = ese_boot_reset_locks(session);
+    if (res == ESE_APP_RESULT_OK) {
+      printf("done.\n");
+      return 0;
+    } else {
+      fprintf(stderr, "lock: failed to reset (%.8x)\n", res);
+      handle_error(session->ese, res);
+      return 3;
+    }
   } else if (args[1] == "set") {
     if (args.size() < 4) {
       fprintf(stderr, "lock set: not enough arguments supplied\n");

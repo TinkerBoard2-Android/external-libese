@@ -433,7 +433,7 @@ class CarrierLock implements LockInterface, BackupInterface {
             // was seen or if we're not production() to assure it doesn't get
             // rolled forward.
             if (resp == 0) {
-                Util.arrayCopy(lockMeta, (short)1,
+                Util.arrayCopy(lockMeta, (short)(VERSION_SIZE + lockMetaOffset),
                                storage, (short)(1 + storageOffset),
                                (short)NONCE_SIZE);
             }
