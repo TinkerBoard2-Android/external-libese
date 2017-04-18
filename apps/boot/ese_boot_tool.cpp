@@ -56,9 +56,7 @@ void usage(const char *prog) {
 #define handle_error(ese, result) ;
 #if 0  // TODO
 void handle_error(struct EseInterface *ese, EseAppResult result) {
-  uint32_t minutes =  ese_cooldown_get(ese, ESE_COOLDOWN_ATTACK);
-  set_timer_cb(minutes * 60, power_down_ese);
-  ...
+   show how to handle different errors, like cooldown before use or after.
 }
 #endif
 
@@ -415,7 +413,10 @@ int main(int argc, char **argv) {
   }
   // TODO(wad): move main to a class so we can just dep inject the hw.
   struct EseInterface ese = ESE_INITIALIZER(ESE_HW_NXP_PN80T_NQ_NCI);
-  ese_open(&ese, nullptr);
+  if (ese_open(&ese, nullptr) != 0) {
+    fprintf(stderr, "failed to open device\n");
+    return 2;
+  }
   EseBootSession session;
   ese_boot_session_init(&session);
   EseAppResult res = ese_boot_session_open(&ese, &session);
