@@ -36,6 +36,8 @@ const uint8_t kGetLockState[] = {0x80, 0x06, 0x00, 0x00, 0x00};
 const uint8_t kSetLockState[] = {0x80, 0x08, 0x00, 0x00, 0x00};
 const uint8_t kSetProduction[] = {0x80, 0x0a};
 const uint8_t kCarrierLockTest[] = {0x80, 0x0c, 0x00, 0x00};
+const uint8_t kFactoryReset[] = {0x80, 0x0e, 0x00, 0x00};
+const uint8_t kLockReset[] = {0x80, 0x0e, 0x01, 0x00};
 
 EseAppResult check_apdu_status(uint8_t code[2]) {
   if (code[0] == 0x90 && code[1] == 0x00) {
@@ -602,6 +604,46 @@ ESE_API EseAppResult ese_boot_set_production(struct EseBootSession *session,
   if (reply[0] != 0x0 || reply[1] != 0x0) {
     ALOGE("ese_boot_set_production: applet error code %x %x", reply[0],
           reply[1]);
+    return ese_make_app_result(reply[0], reply[1]);
+  }
+  return ESE_APP_RESULT_OK;
+}
+
+ESE_API EseAppResult ese_boot_reset_locks(struct EseBootSession *session) {
+  struct EseSgBuffer tx[2];
+  struct EseSgBuffer rx[1];
+  int rx_len;
+  if (!session || !session->ese || !session->active) {
+    return ESE_APP_RESULT_ERROR_ARGUMENTS;
+  }
+
+  uint8_t chan = kLockReset[0] | session->channel_id;
+  tx[0].base = &chan;
+  tx[0].len = 1;
+  tx[1].base = (uint8_t *)&kLockReset[1];
+  tx[1].len = sizeof(kLockReset) - 1;
+
+  uint8_t reply[4]; // App reply or APDU error.
+  rx[0].base = &reply[0];
+  rx[0].len = sizeof(reply);
+
+  rx_len = ese_transceive_sg(session->ese, tx, 2, rx, 1);
+  if (rx_len < 2 || ese_error(session->ese)) {
+    ALOGE("ese_boot_reset_locks: comms failure.");
+    return ESE_APP_RESULT_ERROR_COMM_FAILED;
+  }
+  if (rx_len == 2) {
+    ALOGE("ese_boot_reset_locks: SE exception");
+    EseAppResult ret = check_apdu_status(&reply[0]);
+    return ret;
+  }
+  // Expect the full payload plus the aplet status and the completion code.
+  if (rx_len != 4) {
+    ALOGE("ese_boot_reset_locks: not enough data (%d)", rx_len);
+    return ese_make_app_result(reply[0], reply[1]);
+  }
+  if (reply[0] != 0x0 || reply[1] != 0x0) {
+    ALOGE("ese_boot_reset_locks: applet error code %x %x", reply[0], reply[1]);
     return ese_make_app_result(reply[0], reply[1]);
   }
   return ESE_APP_RESULT_OK;
