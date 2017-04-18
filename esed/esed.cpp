@@ -26,6 +26,7 @@
 #include <esecpp/NxpPn80tNqNci.h>
 using EseInterfaceImpl = android::NxpPn80tNqNci;
 
+#include "OemLock.h"
 #include "Weaver.h"
 
 using android::OK;
@@ -37,6 +38,7 @@ using android::hardware::joinRpcThreadpool;
 using namespace std::chrono_literals;
 
 // HALs
+using android::esed::OemLock;
 using android::esed::Weaver;
 
 int main(int /* argc */, char** /* argv */) {
@@ -64,14 +66,24 @@ int main(int /* argc */, char** /* argv */) {
         LOG(INFO) << "Opened connection to the eSE";
         break;
     }
+    // Close it until use.
+    ese.close();
+
 
     // This will be a single threaded daemon. This is important as libese is not
     // thread safe so we use binder to synchronize requests for us.
     constexpr bool thisThreadWillJoinPool = true;
     configureRpcThreadpool(1, thisThreadWillJoinPool);
-    status_t status;
 
     // -- Instantiate other applet HALs here --
+    status_t status;
+
+    // Create OemLock HAL instance.
+    sp<OemLock> oemLock = new OemLock{ese};
+    status = oemLock->registerAsService();
+    if (status != OK) {
+        LOG(ERROR) << "Failed to register OemLock as a service (status: " << status << ")";
+    }
 
     // Create Weaver HAL instance
     sp<Weaver> weaver = new Weaver{ese};

@@ -20,7 +20,9 @@ ESE_INCLUDE_HW(ESE_HW_NXP_PN80T_NQ_NCI);
 namespace android {
 
 void NxpPn80tNqNci::init() {
-    mEse = new ::EseInterface;
+    if (mEse == nullptr) {
+        mEse = new ::EseInterface;
+    }
     ese_init(mEse, ESE_HW_NXP_PN80T_NQ_NCI);
 }
 

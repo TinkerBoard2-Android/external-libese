@@ -23,6 +23,7 @@
 #include <utils/String8.h>
 
 #include "../apps/weaver/include/ese/app/weaver.h"
+#include "ScopedEseConnection.h"
 
 // libutils
 using android::String8;
@@ -49,8 +50,9 @@ using ::android::hardware::weaver::V1_0::WeaverReadStatus;
 // Methods from ::android::hardware::weaver::V1_0::IWeaver follow.
 Return<void> Weaver::getConfig(getConfig_cb _hidl_cb) {
     LOG(VERBOSE) << "Running Weaver::getNumSlots";
-
     // Open SE session for applet
+    ScopedEseConnection ese{mEse};
+    ese.init();
     EseWeaverSession ws;
     ese_weaver_session_init(&ws);
     EseAppResult res = ese_weaver_session_open(mEse.ese_interface(), &ws);
@@ -88,7 +90,8 @@ Return<void> Weaver::getConfig(getConfig_cb _hidl_cb) {
 Return<WeaverStatus> Weaver::write(uint32_t slotId, const hidl_vec<uint8_t>& key,
                            const hidl_vec<uint8_t>& value) {
     LOG(INFO) << "Running Weaver::write on slot " << slotId;
-
+    ScopedEseConnection ese{mEse};
+    ese.init();
     // Validate the key and value sizes
     if (key.size() != kEseWeaverKeySize) {
         return Status::fromExceptionCode(Status::EX_ILLEGAL_ARGUMENT, WRONG_KEY_SIZE_MSG);
@@ -126,6 +129,8 @@ Return<void> Weaver::read(uint32_t slotId, const hidl_vec<uint8_t>& key, read_cb
     }
 
     // Open SE session for applet
+    ScopedEseConnection ese{mEse};
+    ese.init();
     EseWeaverSession ws;
     ese_weaver_session_init(&ws);
     if (ese_weaver_session_open(mEse.ese_interface(), &ws) != ESE_APP_RESULT_OK) {

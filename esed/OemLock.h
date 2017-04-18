@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-#ifndef ANDROID_ESED_WEAVER_H
-#define ANDROID_ESED_WEAVER_H
+#ifndef ANDROID_ESED_OEMLOCK_H
+#define ANDROID_ESED_OEMLOCK_H
 
-#include <android/hardware/weaver/1.0/IWeaver.h>
+#include <android/hardware/oemlock/1.0/IOemLock.h>
 #include <hidl/MQDescriptor.h>
 #include <hidl/Status.h>
 
@@ -27,19 +27,26 @@ namespace android {
 namespace esed {
 
 using ::android::EseInterface;
-using ::android::hardware::weaver::V1_0::IWeaver;
-using ::android::hardware::weaver::V1_0::WeaverStatus;
+using ::android::hardware::oemlock::V1_0::IOemLock;
+using ::android::hardware::oemlock::V1_0::OemLockSecureStatus;
+using ::android::hardware::oemlock::V1_0::OemLockStatus;
 using ::android::hardware::hidl_vec;
 using ::android::hardware::Return;
 
-struct Weaver : public IWeaver {
-    Weaver(EseInterface& ese) : mEse(ese) {};
+struct OemLock : public IOemLock {
+    OemLock(EseInterface& ese) : mEse(ese) {}
 
-    // Methods from ::android::hardware::weaver::V1_0::IWeaver follow.
-    Return<void> getConfig(getConfig_cb _hidl_cb) override;
-    Return<WeaverStatus> write(uint32_t slotId, const hidl_vec<uint8_t>& key,
-                               const hidl_vec<uint8_t>& value) override;
-    Return<void> read(uint32_t slotId, const hidl_vec<uint8_t>& key, read_cb _hidl_cb) override;
+    // Methods from ::android::hardware::oemlock::V1_0::IOemLock follow.
+    Return<void> getName(getName_cb _hidl_cb) override;
+
+    Return<OemLockSecureStatus> setOemUnlockAllowedByCarrier(
+            bool allowed, const hidl_vec<uint8_t>& signature) override;
+
+    Return<void> isOemUnlockAllowedByCarrier(isOemUnlockAllowedByCarrier_cb _hidl_cb) override;
+
+    Return<OemLockStatus> setOemUnlockAllowedByDevice(bool allowed) override;
+
+    Return<void> isOemUnlockAllowedByDevice(isOemUnlockAllowedByDevice_cb _hidl_cb) override;
 
 private:
     EseInterface& mEse;
@@ -48,4 +55,4 @@ private:
 }  // namespace esed
 }  // namespace android
 
-#endif  // ANDROID_ESED_WEAVER_H
+#endif  // ANDROID_ESED_OEMLOCK_H
