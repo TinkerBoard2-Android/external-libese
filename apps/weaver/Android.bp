@@ -20,3 +20,16 @@ cc_library {
     srcs: ["weaver.c"],
     shared_libs: ["liblog", "libese", "libese-sysdeps"],
 }
+
+cc_test {
+    name: "libese-app-weaver-test",
+    defaults: ["libese-app-defaults"],
+    srcs: ["tests/weaver_test.cpp"],
+    shared_libs: [
+        "libese-app-weaver",
+        "libese_cpp_nxp_pn80t_nq_nci",
+    ],
+    static_libs: [
+        "libgtest",
+    ],
+}
