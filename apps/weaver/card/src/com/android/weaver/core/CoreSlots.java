@@ -38,8 +38,10 @@ class CoreSlots implements Slots {
             mSlots[i] = new Slot();
         }
 
-        final short intBytes = 4;
-        Slot.sRemainingBackoff = JCSystem.makeTransientByteArray(intBytes, JCSystem.CLEAR_ON_RESET);
+        // Make the same size as the value so the whole buffer can be copied in read() so there is
+        // no time difference between success and failure.
+        Slot.sRemainingBackoff = JCSystem.makeTransientByteArray(
+                Consts.SLOT_VALUE_BYTES, JCSystem.CLEAR_ON_RESET);
     }
 
     @Override
@@ -128,7 +130,10 @@ class CoreSlots implements Slots {
          */
         public byte read(byte[] keyBuffer, short keyOffset, byte[] outBuffer, short outOffset) {
             // Check timeout has expired or hasn't been started
+            // TODO: bring back the timer
             //mBackoffTimer.getRemainingTime(sRemainingBackoff, (short) 0);
+            Util.setShort(sRemainingBackoff, (short) 0, (short) 0);
+            Util.setShort(sRemainingBackoff, (short) 2, (short) 0);
             if (sRemainingBackoff[0] != 0 || sRemainingBackoff[1] != 0 ||
                   sRemainingBackoff[2] != 0 || sRemainingBackoff[3] != 0) {
                 Util.arrayCopyNonAtomic(
@@ -136,34 +141,37 @@ class CoreSlots implements Slots {
                 return Consts.READ_BACK_OFF;
             }
 
-            // Assume this to be a failed attempt until proven otherwise. This means losing power
-            // midway cannot be abused for extra attempts.
-            JCSystem.beginTransaction();
-            if (mFailureCount != 0x7fff) {
-                mFailureCount += 1;
+            // Check the key matches in constant time and copy out the value if it does
+            byte difference = 0;
+            for (short i = 0; i < Consts.SLOT_KEY_BYTES; ++i) {
+                difference |= keyBuffer[(short) (keyOffset + i)] ^ mKey[i];
             }
-            throttle(sRemainingBackoff, (short) 0, mFailureCount);
-            //mBackoffTimer.startTimer(
-            //        sRemainingBackoff, (short) 0, DSTimer.DST_POWEROFFMODE_FALLBACK);
-            JCSystem.commitTransaction();
+            final byte result = (difference == 0) ? Consts.READ_SUCCESS : Consts.READ_WRONG_KEY;
 
-            // Check the key matches and copy out the value if it does
-            if (Util.arrayCompare(
-                    keyBuffer, keyOffset, mKey, (short) 0, Consts.SLOT_KEY_BYTES) != 0) {
-                Util.arrayCopyNonAtomic(
-                        sRemainingBackoff, (short) 0, outBuffer, outOffset, (byte) 4);
-                return Consts.READ_WRONG_KEY;
+            // Keep track of the number of failures
+            if (result == Consts.READ_WRONG_KEY) {
+                if (mFailureCount != 0x7fff) {
+                    mFailureCount += 1;
+                }
+            } else {
+                // This read was successful so reset the failures
+                if (mFailureCount != 0) { // attempt to maintain constant time
+                    mFailureCount = 0;
+                }
             }
 
-            // This attempt was successful so reset the failures
-            JCSystem.beginTransaction();
-            mFailureCount = 0;
-            //mBackoffTimer.stopTimer();
-            JCSystem.commitTransaction();
+            // Start the timer on a failure
+            if (throttle(sRemainingBackoff, (short) 0, mFailureCount)) {
+                //mBackoffTimer.startTimer(
+                //        sRemainingBackoff, (short) 0, DSTimer.DST_POWEROFFMODE_FALLBACK);
+            } else {
+                //mBackoffTimer.stopTimer();
+            }
 
-            Util.arrayCopyNonAtomic(
-                    mValue, (short) 0, outBuffer, outOffset, Consts.SLOT_VALUE_BYTES);
-            return Consts.READ_SUCCESS;
+            final byte[] data = (result == Consts.READ_SUCCESS) ? mValue : sRemainingBackoff;
+            Util.arrayCopyNonAtomic(data, (short) 0, outBuffer, outOffset, Consts.SLOT_VALUE_BYTES);
+
+            return result;
         }
 
         /**
@@ -187,8 +195,10 @@ class CoreSlots implements Slots {
          * [140, inf) -> 1 day
          *
          * The 32-bit millisecond timeout is written to the array.
+         *
+         * @return Whether there is any throttle time.
          */
-        private static void throttle(byte[] bArray, short bOff, short failureCount) {
+        private static boolean throttle(byte[] bArray, short bOff, short failureCount) {
             short highWord = 0;
             short lowWord = 0;
 
@@ -219,6 +229,8 @@ class CoreSlots implements Slots {
             // Write the value to the buffer
             Util.setShort(bArray, bOff, highWord);
             Util.setShort(bArray, (short) (bOff + 2), lowWord);
+
+            return highWord != 0 || lowWord != 0;
         }
     }
 }
