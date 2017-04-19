@@ -308,7 +308,7 @@ ESE_API EseAppResult ese_weaver_read(struct EseWeaverSession *session,
   tx[4].len = 1;
 
   // Prepare buffer for result
-  struct EseSgBuffer rx[2];
+  struct EseSgBuffer rx[3];
   uint8_t appletStatus;
   rx[0].base = &appletStatus;
   rx[0].len = 1;
@@ -319,7 +319,7 @@ ESE_API EseAppResult ese_weaver_read(struct EseWeaverSession *session,
   rx[2].len = sizeof(rx_buf);
 
   // Send the command
-  const int rx_len = ese_transceive_sg(session->ese, tx, 5, rx, 2);
+  const int rx_len = ese_transceive_sg(session->ese, tx, 5, rx, 3);
 
   // Check for errors
   if (rx_len < 2 || ese_error(session->ese)) {
