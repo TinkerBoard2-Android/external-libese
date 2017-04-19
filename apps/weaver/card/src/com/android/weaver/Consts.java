@@ -30,8 +30,6 @@ public class Consts {
     // Errors
     public static final short SW_INVALID_SLOT_ID = 0x6a86;
 
-    public static final byte CLA = (byte) 0x80;
-
     // Instructions
     public static final byte INS_GET_NUM_SLOTS = 0x02;
     public static final byte INS_WRITE = 0x4;
