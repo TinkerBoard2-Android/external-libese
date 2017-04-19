@@ -81,24 +81,16 @@ public class Weaver extends Applet {
 
         // Handle standard commands
         if (apdu.isISOInterindustryCLA()) {
-            if (cla == ISO7816.CLA_ISO7816) {
-                switch (ins) {
-                    case ISO7816.INS_SELECT:
-                        // Do nothing, successfully
-                        return;
-                    default:
-                        ISOException.throwIt(ISO7816.SW_INS_NOT_SUPPORTED);
-                }
-            } else {
-                ISOException.throwIt(ISO7816.SW_CLA_NOT_SUPPORTED);
+            switch (ins) {
+                case ISO7816.INS_SELECT:
+                    // Do nothing, successfully
+                    return;
+                default:
+                    ISOException.throwIt(ISO7816.SW_INS_NOT_SUPPORTED);
             }
         }
 
         // Handle custom applet commands
-        if (cla != Consts.CLA) {
-            ISOException.throwIt(ISO7816.SW_CLA_NOT_SUPPORTED);
-        }
-
         switch (ins) {
             case Consts.INS_GET_NUM_SLOTS:
                 getNumSlots(apdu);
