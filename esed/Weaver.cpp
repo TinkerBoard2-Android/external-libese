@@ -53,7 +53,18 @@ Return<void> Weaver::getConfig(getConfig_cb _hidl_cb) {
     // Open SE session for applet
     EseWeaverSession ws;
     ese_weaver_session_init(&ws);
-    if (ese_weaver_session_open(mEse.ese_interface(), &ws) != ESE_APP_RESULT_OK) {
+    EseAppResult res = ese_weaver_session_open(mEse.ese_interface(), &ws);
+    if (EseAppResultValue(res) == ESE_APP_RESULT_ERROR_OS) {
+        switch (EseAppResultAppValue(res)) {
+        case 0x6999: // SW_APPLET_SELECT_FAILED
+        case 0x6A82: // SW_FILE_NOT_FOUND
+            // No applet means no Weaver storage. Report no slots to prompt
+            // fallback to software mode.
+            _hidl_cb(WeaverStatus::OK, WeaverConfig{0, 0, 0});
+            return Void();
+        }
+    } else if (res != ESE_APP_RESULT_OK) {
+        // Transient error
         _hidl_cb(WeaverStatus::FAILED, WeaverConfig{});
         return Void();
     }
