@@ -331,9 +331,11 @@ enum RuleResult teq1_rules(struct Teq1State *state, struct Teq1Frame *tx_frame,
       /* Rule 7.4.2 */
       if (state->errors >= 3) {
         /* Rule 7.4.1: state should start with error count = 2 */
-        next_tx->header.PCB = S(RESYNC, REQUEST);
-        /* Resync result in a fresh session, so we should just continue here. */
-        return kRuleResultContinue;
+        if (tx_frame->header.PCB != S(RESYNC, REQUEST)) {
+          next_tx->header.PCB = S(RESYNC, REQUEST);
+          return kRuleResultContinue;
+        }
+        return kRuleResultRetransmit;
       }
     }
 
@@ -619,11 +621,13 @@ ESE_API uint32_t teq1_transceive(struct EseInterface *ese,
       if (state.retransmits++ < 3) {
         continue;
       }
+      ALOGE("More than three retransmits have occurred");
       if (tx->header.PCB == S(RESYNC, REQUEST)) {
         ese_set_error(ese, kTeq1ErrorHardFail);
         return 0;
       }
       /* Fall through */
+      ALOGE("Triggering resynchronization.");
       tx_frame[!active].header.PCB = S(RESYNC, REQUEST);
     case kRuleResultContinue:
       active = !active;
