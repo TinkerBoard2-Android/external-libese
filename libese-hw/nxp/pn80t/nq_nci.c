@@ -63,11 +63,17 @@ struct PlatformHandle {
 
 int platform_toggle_bootloader(void *blob, int val) {
   const struct PlatformHandle *handle = blob;
+  if (!handle) {
+    return -1;
+  }
   return ioctl(handle->fd, ESE_CLEAR_GPIO, val);
 }
 
 int platform_toggle_reset(void *blob, int val) {
   const struct PlatformHandle *handle = blob;
+  if (!handle) {
+    return -1;
+  }
   /* 0=power and 1=no power in the kernel. */
   return ioctl(handle->fd, ESE_SET_PWR, !val);
 }
@@ -95,6 +101,9 @@ void *platform_init(void *hwopts) {
 
 int platform_release(void *blob) {
   struct PlatformHandle *handle = blob;
+  if (!handle) {
+    return -1;
+  }
   /* Power off and cooldown should've happened via common code. */
   close(handle->fd);
   free(handle);
