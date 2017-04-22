@@ -58,6 +58,7 @@ int nxp_pn80t_open(struct EseInterface *ese, void *board) {
     /* This is a compile-time correctable error only. */
     ALOGE("Pad size too small to use NXP HW (%zu < %zu)", sizeof(ese->pad),
           sizeof(struct NxpState));
+    ese_set_error(ese, kNxpPn80tErrorPlatformInit);
     return -1;
   }
   platform = ese->ops->opts;
@@ -66,6 +67,7 @@ int nxp_pn80t_open(struct EseInterface *ese, void *board) {
   if (!platform->initialize || !platform->release || !platform->toggle_reset ||
       !platform->wait) {
     ALOGE("Required functions not implemented in supplied platform");
+    ese_set_error(ese, kNxpPn80tErrorPlatformInit);
     return -1;
   }
 
@@ -167,6 +169,9 @@ uint32_t nxp_pn80t_send_cooldown(struct EseInterface *ese, bool end) {
   uint32_t *timers[TIMER_COUNT];
   uint32_t max_wait = 0;
   const uint8_t *message = kResetSession;
+  if (ese->error.is_err) {
+    return 0;
+  }
   if (end) {
     message = kEndofApduSession;
   }
@@ -273,7 +278,9 @@ void nxp_pn80t_close(struct EseInterface *ese) {
   uint32_t wait_min = 0;
   ALOGV("%s: called", __func__);
   ns = NXP_PN80T_STATE(ese);
-  wait_min = nxp_pn80t_send_cooldown(ese, true);
+  if (!ese->error.is_err) {
+    wait_min = nxp_pn80t_send_cooldown(ese, true);
+  }
   /* In practice, this should probably migrate into the kernel
    * and into the spidev code such that each platform can handle it
    * as needed.

@@ -40,6 +40,8 @@ ESE_API int ese_open(struct EseInterface *ese, void *hw_opts) {
     return -1;
   }
   ALOGV("opening interface '%s'", ese_name(ese));
+  ese->error.is_err = false;
+  ese->error.code = 0;
   if (ese->ops->open) {
     return ese->ops->open(ese, hw_opts);
   }
@@ -100,7 +102,9 @@ ESE_API int ese_transceive_sg(struct EseInterface *ese,
   if (!ese) {
     return -1;
   }
-
+  if (ese->error.is_err) {
+    return -1;
+  }
   if (ese->ops->transceive) {
     recvd = ese->ops->transceive(ese, tx_bufs, tx_segs, rx_bufs, rx_segs);
     return ese_error(ese) ? -1 : recvd;
