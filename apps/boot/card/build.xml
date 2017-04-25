@@ -16,34 +16,55 @@
 <!-- Ant XML for out of band building the applet.  -->
 <project basedir="." default="avb_storage" name="applet build">
 
-<!-- Grab the sdk. -->
-<get src="https://github.com/martinpaljak/oracle_javacard_sdks/archive/master.zip"
-     dest="javacard_sdks.zip" skipexisting="true"/>
-<unzip src="javacard_sdks.zip" dest="." stripAbsolutePathSpec="true">
-  <patternset>
-    <include name="**/jc303_kit/**"/>
-  </patternset>
-  <cutdirsmapper dirs="1" />
-</unzip>
+<target name="check-checksum">
+    <checksum file="${tocheck}" algorithm="SHA-512" fileext=".SHA-512" pattern="{0} {1}"
+        verifyProperty="checksum_verifies"/>
+    <fail message="Checksum mismatch on ${tocheck}">
+        <condition>
+            <not>
+                <istrue value="${checksum_verifies}" />
+            </not>
+        </condition>
+    </fail>
+</target>
 
-<!-- Grab the awesome ant helper. -->
-<get src="https://github.com/martinpaljak/ant-javacard/releases/download/v1.7/ant-javacard.jar" dest="." skipexisting="true"/>
-<taskdef name="javacard" classname="pro.javacard.ant.JavaCard" classpath="ant-javacard.jar"/>
+<target name="dependencies">
+    <!-- Check we have the files that have to be placed in source dir by hand -->
+    <antcall target="check-checksum">
+        <param name="tocheck" location="loaderservice/ls_library_v02.00.jar"/>
+    </antcall>
+    <unzip src="loaderservice/ls_library_v02.00.jar" dest="loaderservice" />
 
-<target name="shared_interfaces">
+    <antcall target="check-checksum">
+        <param name="tocheck" location="com.nxp.id.jcop.eclipse.targetpacks1_4.10.0.1.jar"/>
+    </antcall>
+    <unzip src="com.nxp.id.jcop.eclipse.targetpacks1_4.10.0.1.jar" dest="unpack/com.nxp.id.jcop.eclipse.targetpacks1_4.10.0.1" />
+
+    <!-- Grab the awesome ant helper. -->
+    <get src="https://github.com/martinpaljak/ant-javacard/releases/download/v1.7/ant-javacard.jar" dest="." skipexisting="true"/>
+    <antcall target="check-checksum">
+        <param name="tocheck" location="ant-javacard.jar"/>
+    </antcall>
+
+    <taskdef name="javacard" classname="pro.javacard.ant.JavaCard" classpath="ant-javacard.jar"/>
+
+    <!-- Grab the sdk. -->
+    <get src="https://github.com/martinpaljak/oracle_javacard_sdks/archive/master.zip"
+         dest="javacard_sdks.zip" skipexisting="true"/>
+    <antcall target="check-checksum">
+        <param name="tocheck" location="javacard_sdks.zip"/>
+    </antcall>
+    <unzip src="javacard_sdks.zip" dest="." stripAbsolutePathSpec="true">
+      <patternset>
+        <include name="**/jc303_kit/**"/>
+      </patternset>
+      <cutdirsmapper dirs="1" />
+    </unzip>
+
+</target>
+
+<target name="shared_interfaces" depends="dependencies">
 <javacard jckit="jc303_kit">
-  <!-- Build the JCOPX jar file. AID and cap file are not used. exps either. -->
-  <cap aid="A000000FFFFFFFFFFFFFFFFFFFFFFF" package="com.nxp.id.jcopx.security"  version="0.1"
-       output="jcopx-security.cap" sources="jcopx/src/com/nxp/id/jcopx/security" export="export-jcopx/security">
-       <!-- Only use the exports for dummy cap creation -->
-       <import exps="export-jcopx/security"/>
-  </cap>
-  <cap aid="A000000FFFFFFFFFFFFFFFFFFFFFFF" package="com.nxp.id.jcopx.util"  version="0.1"
-       output="jcopx-util.cap" sources="jcopx/src/com/nxp/id/jcopx/util" export="export-jcopx/util">
-       <!-- Only use the exports for dummy cap creation -->
-       <import exps="export-jcopx/util"/>
-       <import exps="export-jcopx/security" jar="export-jcopx/security.jar"/>
-  </cap>
   <!-- CallbackInterface -->
   <cap aid="A000000476424F4F54525354300000" package="com.android.verifiedboot.globalstate.callback"  version="0.1"
        output="globalstate-callback.cap" sources="src/com/android/verifiedboot/globalstate/callback" export="export/callback">
@@ -58,20 +79,25 @@
 </target>
 
 <target name="avb_storage" depends="shared_interfaces">
-<javacard jckit="jc303_kit">
-  <!-- CallbackInterface -->
-  <cap aid="A0000004765049584C424F4F54000100" package="com.android.verifiedboot.storage" version="0.1"
-       output="avb_storage.cap" sources="src/com/android/verifiedboot" export="export">
-    <!-- Use supplied exp and build interface jar. -->
-    <import exps="jcopx" jar="export-jcopx/util/util.jar"/>
-    <!-- Requires ls_library to be on the device already. -->
-    <import exps="loaderservice" jar="loaderservice/ls_library_v02.00.jar"/>
-    <!-- Grab the other interfaces from export/ -->
-    <import exps="export/owner" jar="export/owner/owner.jar" />
-    <import exps="export/callback" jar="export/callback/callback.jar" />
-    <applet class="com.android.verifiedboot.storage.Storage" aid="A0000004765049584C424F4F54000101"/>
-    <import exps="export/avb_storage"/>
-  </cap>
-</javacard>
+    <property name="apidir" location="unpack/com.nxp.id.jcop.eclipse.targetpacks1_4.10.0.1/apis/jcopx-4.0-R2"/>
+    <!-- Remove the duplicate .exps -->
+    <delete>
+        <fileset dir="${apidir}" includes="*.exp"/>
+    </delete>
+    <javacard jckit="jc303_kit">
+      <!-- CallbackInterface -->
+      <cap aid="A0000004765049584C424F4F54000100" package="com.android.verifiedboot.storage" version="0.1"
+           output="avb_storage.cap" sources="src/com/android/verifiedboot" export="export/avb_storage">
+        <!-- Use supplied exp and build interface jar from the eclipse plugin targetpack. -->
+        <import exps="${apidir}" jar="${apidir}/api-jcopx-4.0-R2.jar"/>
+        <!-- Requires ls_library to be on the device already. -->
+        <import exps="loaderservice" jar="loaderservice/ls_library_v02.00.jar"/>
+        <!-- Grab the other interfaces from export/ -->
+        <import exps="export/owner" jar="export/owner/owner.jar" />
+        <import exps="export/callback" jar="export/callback/callback.jar" />
+        <applet class="com.android.verifiedboot.storage.Storage" aid="A0000004765049584C424F4F54000101"/>
+        <import exps="export/avb_storage"/>
+      </cap>
+    </javacard>
 </target>
 </project>
