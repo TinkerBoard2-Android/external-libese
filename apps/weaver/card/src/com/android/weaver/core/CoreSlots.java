@@ -24,7 +24,7 @@ import javacard.framework.Util;
 import com.android.weaver.Consts;
 import com.android.weaver.Slots;
 
-//import com.nxp.id.jcopx.util.DSTimer;
+import com.nxp.id.jcopx.util.DSTimer;
 
 class CoreSlots implements Slots {
     static final byte NUM_SLOTS = 64;
@@ -87,7 +87,7 @@ class CoreSlots implements Slots {
         private byte[] mKey = new byte[Consts.SLOT_KEY_BYTES];
         private byte[] mValue = new byte[Consts.SLOT_VALUE_BYTES];
         private short mFailureCount;
-        //private DSTimer mBackoffTimer;
+        private DSTimer mBackoffTimer;
 
         /**
          * Transactionally reset the slot with a new key and value.
@@ -103,7 +103,7 @@ class CoreSlots implements Slots {
             Util.arrayCopy(keyBuffer, keyOffset, mKey, (short) 0, Consts.SLOT_KEY_BYTES);
             Util.arrayCopy(valueBuffer, valueOffset, mValue, (short) 0, Consts.SLOT_VALUE_BYTES);
             mFailureCount = 0;
-            //mBackoffTimer = DSTimer.getInstance();
+            mBackoffTimer = DSTimer.getInstance();
             JCSystem.commitTransaction();
         }
 
@@ -115,7 +115,7 @@ class CoreSlots implements Slots {
             arrayFill(mKey, (short) 0, Consts.SLOT_KEY_BYTES, (byte) 0);
             arrayFill(mValue, (short) 0, Consts.SLOT_VALUE_BYTES, (byte) 0);
             mFailureCount = 0;
-            //mBackoffTimer.stopTimer();
+            mBackoffTimer.stopTimer();
             JCSystem.commitTransaction();
         }
 
@@ -130,10 +130,7 @@ class CoreSlots implements Slots {
          */
         public byte read(byte[] keyBuffer, short keyOffset, byte[] outBuffer, short outOffset) {
             // Check timeout has expired or hasn't been started
-            // TODO: bring back the timer
-            //mBackoffTimer.getRemainingTime(sRemainingBackoff, (short) 0);
-            Util.setShort(sRemainingBackoff, (short) 0, (short) 0);
-            Util.setShort(sRemainingBackoff, (short) 2, (short) 0);
+            mBackoffTimer.getRemainingTime(sRemainingBackoff, (short) 0);
             if (sRemainingBackoff[0] != 0 || sRemainingBackoff[1] != 0 ||
                   sRemainingBackoff[2] != 0 || sRemainingBackoff[3] != 0) {
                 Util.arrayCopyNonAtomic(
@@ -162,10 +159,10 @@ class CoreSlots implements Slots {
 
             // Start the timer on a failure
             if (throttle(sRemainingBackoff, (short) 0, mFailureCount)) {
-                //mBackoffTimer.startTimer(
-                //        sRemainingBackoff, (short) 0, DSTimer.DST_POWEROFFMODE_FALLBACK);
+                mBackoffTimer.startTimer(
+                        sRemainingBackoff, (short) 0, DSTimer.DST_POWEROFFMODE_FALLBACK);
             } else {
-                //mBackoffTimer.stopTimer();
+                mBackoffTimer.stopTimer();
             }
 
             final byte[] data = (result == Consts.READ_SUCCESS) ? mValue : sRemainingBackoff;
@@ -184,7 +181,7 @@ class CoreSlots implements Slots {
         }
 
         /**
-         * Calculates the timeout in milliseconds as a function of the failure
+         * Calculates the timeout in seconds as a function of the failure
          * counter 'x' as follows:
          *
          * [0, 5) -> 0
@@ -194,7 +191,7 @@ class CoreSlots implements Slots {
          * [30, 140) -> 30 * (2^((x - 30)/10))
          * [140, inf) -> 1 day
          *
-         * The 32-bit millisecond timeout is written to the array.
+         * The 32-bit timeout in seconds is written to the array.
          *
          * @return Whether there is any throttle time.
          */
@@ -202,28 +199,27 @@ class CoreSlots implements Slots {
             short highWord = 0;
             short lowWord = 0;
 
-            final short thirtySecondsInMilliseconds = 0x7530; // = 1000 * 30
+            final short thirtySeconds = 30;
             if (failureCount == 0) {
                 // 0s
             } else if (failureCount > 0 && failureCount <= 10) {
                 if (failureCount % 5 == 0) {
                     // 30s
-                  lowWord = thirtySecondsInMilliseconds;
+                  lowWord = thirtySeconds;
                 }  else {
                     // 0s
                 }
             } else if (failureCount < 30) {
                 // 30s
-                lowWord = thirtySecondsInMilliseconds;
+                lowWord = thirtySeconds;
             } else if (failureCount < 140) {
                 // 30 * (2^((x - 30)/10))
                 final short shift = (short) ((short) (failureCount - 30) / 10);
-                highWord = (short) (thirtySecondsInMilliseconds >> (16 - shift));
-                lowWord = (short) (thirtySecondsInMilliseconds << shift);
+                lowWord = (short) (thirtySeconds << shift);
             } else {
-                // 1 day in ms = 1000 * 60 * 60 * 24 = 0x526 5C00
-                highWord = 0x0526;
-                lowWord = 0x5c00;
+                // 1 day in seconds = 24 * 60 * 60 = 0x1 5180
+                highWord = 0x1;
+                lowWord = 0x5180;
             }
 
             // Write the value to the buffer

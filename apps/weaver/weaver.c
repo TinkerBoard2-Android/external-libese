@@ -340,16 +340,17 @@ ESE_API EseAppResult ese_weaver_read(struct EseWeaverSession *session,
   const uint8_t READ_SUCCESS = 0x00;
   const uint8_t READ_WRONG_KEY = 0x7f;
   const uint8_t READ_BACK_OFF = 0x76;
+  const uint32_t millisInSecond = 1000;
   // wrong key
   if (appletStatus == READ_WRONG_KEY) {
     ALOGI("ese_weaver_read wrong key provided");
-    *timeout = get_uint32(value);
+    *timeout = get_uint32(value) * millisInSecond;
     return ESE_WEAVER_READ_WRONG_KEY;
   }
   // backoff
   if (appletStatus == READ_BACK_OFF) {
     ALOGI("ese_weaver_read wrong key provided");
-    *timeout = get_uint32(value);
+    *timeout = get_uint32(value) * millisInSecond;
     return ESE_WEAVER_READ_TIMEOUT;
   }
   if (rx_len != 19) {
