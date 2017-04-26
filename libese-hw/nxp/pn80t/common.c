@@ -18,10 +18,6 @@
 
 #include "include/ese/hw/nxp/pn80t/common.h"
 
-#ifndef INT_MAX
-#define INT_MAX 2147483647
-#endif
-
 int nxp_pn80t_preprocess(const struct Teq1ProtocolOptions *const opts,
                          struct Teq1Frame *frame, int tx) {
   if (tx) {
@@ -149,57 +145,65 @@ int nxp_pn80t_poll(struct EseInterface *ese, uint8_t poll_for, float timeout,
   return -1;
 }
 
-/* Returns the minutes the chip has requested to stay powered for internal
+/* Returns the seconds the chip has requested to stay powered for internal
  * maintenance. This is not expected during normal operation, but it is still
  * a possible operating response.
  *
  * There are three timers reserved for internal state usage which are
  * not reliable API. As such, this function returns the maximum time
- * in minutes that the chip would like to stay powered-on.
+ * in seconds that the chip would like to stay powered-on.
  */
-#define TIMER_COUNT 3
-#define TIMER_BASE 0xF0
+#define SECURE_TIMER 0xF1
+#define ATTACK_COUNTER 0xF2
+#define RESTRICTED_MODE_PENALTY 0xF3
 uint32_t nxp_pn80t_send_cooldown(struct EseInterface *ese, bool end) {
-  const struct Pn80tPlatform *platform = ese->ops->opts;
-  const static uint8_t kEndofApduSession[] = {0x5a, 0xc5, 0x00, 0xc5};
-  const static uint8_t kResetSession[] = {0x5a, 0xc4, 0x00, 0xc4};
-  uint8_t rx_buf[32];
-  uint32_t bytes_read = 0;
-  int timer = 0;
-  uint32_t *timers[TIMER_COUNT];
-  uint32_t max_wait = 0;
-  const uint8_t *message = kResetSession;
   if (ese->error.is_err) {
     return 0;
   }
-  if (end) {
-    message = kEndofApduSession;
-  }
-  ese->ops->hw_transmit(ese, kEndofApduSession, sizeof(kEndofApduSession), 1);
+
+  const static uint8_t kEndofApduSession[] = {0x5a, 0xc5, 0x00, 0xc5};
+  const static uint8_t kResetSession[] = {0x5a, 0xc4, 0x00, 0xc4};
+  const uint8_t *const message = end ? kEndofApduSession : kResetSession;
+  const uint32_t message_len =
+      end ? sizeof(kEndofApduSession) : sizeof(kResetSession);
+  ese->ops->hw_transmit(ese, message, message_len, 1);
+
   nxp_pn80t_poll(ese, kTeq1Options.host_address, 5.0f, 0);
-  bytes_read = ese->ops->hw_receive(ese, rx_buf, sizeof(rx_buf), 1);
-  ALOGI("Requested power-down delay times (min):");
+  uint8_t rx_buf[32];
+  const uint32_t bytes_read =
+      ese->ops->hw_receive(ese, rx_buf, sizeof(rx_buf), 1);
+  ALOGI("Requested power-down delay times (sec):");
+
   /* For each tag type, walk the response to extract the value. */
+  uint32_t max_wait = 0;
   if (bytes_read >= 0x8 && rx_buf[0] == 0xe5 && rx_buf[1] == 0x12) {
-    for (; timer < TIMER_COUNT; ++timer) {
-      timers[timer] = NULL;
-      uint8_t *tag = &rx_buf[2];
-      while (tag < (rx_buf + bytes_read)) {
-        uint8_t *tag_len = tag + 1;
-        if (*tag == (TIMER_BASE | (timer + 1))) {
-          if (*tag_len == 4) {
-            timers[timer] = (uint32_t *)(tag + 2);
-            ALOGI("- Timer 0x%.2X: %d", (TIMER_BASE | (timer + 1)),
-                  *timers[timer]);
-            if (*timers[timer] > max_wait) {
-              max_wait = *timers[timer];
-            }
+    uint8_t *tag_ptr = &rx_buf[2];
+    while (tag_ptr < (rx_buf + bytes_read)) {
+      const uint8_t tag = *tag_ptr;
+      const uint8_t length = *(tag_ptr + 1);
+
+      // The cooldown timers are 32-bit values
+      if (length == 4) {
+        const uint32_t *const value_ptr = (uint32_t *)(tag_ptr + 2);
+        uint32_t cooldown = ese_be32toh(*value_ptr);
+        switch (tag) {
+        case ATTACK_COUNTER:
+          // This cooldown timer is in minutes, so convert it to seconds
+          cooldown *= 60;
+        // Fallthrough
+        case SECURE_TIMER:
+        case RESTRICTED_MODE_PENALTY:
+          ALOGI("- Timer 0x%.2X: %d", tag, cooldown);
+          if (cooldown > max_wait) {
+            max_wait = cooldown;
           }
           break;
-        } else {
-          tag += 1;
+        default:
+          // Ignore -- not a cooldown timer
+          break;
         }
       }
+      tag_ptr += 2 + length;
     }
   }
   return max_wait;
@@ -231,6 +235,7 @@ uint32_t nxp_pn80t_handle_interface_call(struct EseInterface *ese,
   case kResetCommand:
     ALOGI("interface command received: reset");
     if (nxp_pn80t_reset(ese) < 0) {
+      /* TODO(wad): wire up a call to hw_reset and teq1_reset */
       /* Warning, state unchanged error. */
       ok[0] = 0x62;
     }
@@ -253,8 +258,8 @@ uint32_t nxp_pn80t_handle_interface_call(struct EseInterface *ese,
   case kCooldownCommand:
     ALOGI("interface command received: cooldown");
     uint8_t reply[6] = {0, 0, 0, 0, 0x90, 0x00};
-    uint32_t cooldownMin = nxp_pn80t_send_cooldown(ese, false);
-    *(uint32_t *)(&reply[0]) = cooldownMin;
+    const uint32_t cooldownSec = nxp_pn80t_send_cooldown(ese, false);
+    *(uint32_t *)(&reply[0]) = ese_htole32(cooldownSec);
     return ese_sg_from_buf(rx_buf, rx_len, 0, sizeof(reply), reply);
   }
   return 0;
@@ -264,7 +269,7 @@ uint32_t nxp_pn80t_transceive(struct EseInterface *ese,
                               const struct EseSgBuffer *tx_buf, uint32_t tx_len,
                               struct EseSgBuffer *rx_buf, uint32_t rx_len) {
 
-  uint32_t recvd =
+  const uint32_t recvd =
       nxp_pn80t_handle_interface_call(ese, tx_buf, tx_len, rx_buf, rx_len);
   if (recvd > 0) {
     return recvd;
@@ -273,19 +278,17 @@ uint32_t nxp_pn80t_transceive(struct EseInterface *ese,
 }
 
 void nxp_pn80t_close(struct EseInterface *ese) {
-  struct NxpState *ns;
-  const struct Pn80tPlatform *platform = ese->ops->opts;
-  uint32_t wait_min = 0;
   ALOGV("%s: called", __func__);
-  ns = NXP_PN80T_STATE(ese);
-  if (!ese->error.is_err) {
-    wait_min = nxp_pn80t_send_cooldown(ese, true);
-  }
+  struct NxpState *ns = NXP_PN80T_STATE(ese);
+  const struct Pn80tPlatform *platform = ese->ops->opts;
+  const uint32_t wait_sec =
+      ese->error.is_err ? 0 : nxp_pn80t_send_cooldown(ese, true);
+
   /* In practice, this should probably migrate into the kernel
    * and into the spidev code such that each platform can handle it
    * as needed.
    */
-  if (!wait_min) {
+  if (wait_sec == 0) {
     platform->toggle_reset(ns->handle, 0);
     if (platform->toggle_power_req) {
       platform->toggle_power_req(ns->handle, 0);
@@ -294,6 +297,7 @@ void nxp_pn80t_close(struct EseInterface *ese) {
       platform->toggle_ven(ns->handle, 0);
     }
   }
+
   platform->release(ns->handle);
   ns->handle = NULL;
 }
