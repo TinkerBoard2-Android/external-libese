@@ -37,14 +37,14 @@
     output="weaver_comm.cap" sources="src/com/android/weaver" export="export/comm">
     <applet class="com.android.weaver.Weaver" aid="A00000006203010C0101"/>
     <import exps="export/comm" />
+    <import exps="jcopx-4.0-R2" jar="jcopx-4.0-R2/api-jcopx-4.0-R2.jar" />
   </cap>
   <!-- Core applet -->
   <cap aid="A00000006203010C02" package="com.android.weaver.core" version="0.1"
     output="weaver_core.cap" sources="src/com/android/weaver/core" export="export/core">
-    <!-- TODO: reintroduce jcopx dependency for DSTimer -->
-    <!-- Grab the other interfaces from export/ -->
-    <import exps="export/comm" jar="export/comm/weaver.jar" />
     <applet class="com.android.weaver.core.WeaverCore" aid="A00000006203010C0201"/>
+    <import exps="export/comm" jar="export/comm/weaver.jar" />
+    <import exps="jcopx-4.0-R2" jar="jcopx-4.0-R2/api-jcopx-4.0-R2.jar" />
   </cap>
 </javacard>
 </target>
