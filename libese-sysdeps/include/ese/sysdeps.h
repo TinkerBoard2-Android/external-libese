@@ -38,4 +38,9 @@
 extern void *ese_memcpy(void *__dest, const void *__src, uint64_t __n);
 extern void *ese_memset(void *__s, int __c, uint64_t __n);
 
+extern uint32_t ese_be32toh(uint32_t big_endian_32bits);
+extern uint32_t ese_htobe32(uint32_t host_32bits);
+extern uint32_t ese_le32toh(uint32_t little_endian_32bits);
+extern uint32_t ese_htole32(uint32_t host_32bits);
+
 #endif  /* ESE_SYSDEPS_H__ */
