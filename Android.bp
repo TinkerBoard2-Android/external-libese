@@ -17,6 +17,7 @@
 subdirs = [
     "apps",
     "esed",
+    "external",
     "examples",
     "libapdu",
     "libese",
