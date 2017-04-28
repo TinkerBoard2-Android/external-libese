@@ -139,11 +139,9 @@ class CoreSlots implements Slots {
             }
 
             // Check the key matches in constant time and copy out the value if it does
-            byte difference = 0;
-            for (short i = 0; i < Consts.SLOT_KEY_BYTES; ++i) {
-                difference |= keyBuffer[(short) (keyOffset + i)] ^ mKey[i];
-            }
-            final byte result = (difference == 0) ? Consts.READ_SUCCESS : Consts.READ_WRONG_KEY;
+            final byte result = (Util.arrayCompare(
+                    keyBuffer, keyOffset, mKey, (short) 0, Consts.SLOT_KEY_BYTES) == 0) ?
+                    Consts.READ_SUCCESS : Consts.READ_WRONG_KEY;
 
             // Keep track of the number of failures
             if (result == Consts.READ_WRONG_KEY) {
