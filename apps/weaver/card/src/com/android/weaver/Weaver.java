@@ -27,8 +27,12 @@ import javacard.framework.Util;
 
 public class Weaver extends Applet {
     // Keep constants in sync with esed
+    // Uses the full AID which needs to be kept in sync on updates.
     public static final byte[] CORE_APPLET_AID
-            = new byte[] {(byte)0xa0, 0x00, 0x00, 0x00, 0x62, 0x03, 0x01, 0x0c, 0x02, 0x01};
+            = new byte[] {(byte) 0xA0, 0x00, 0x00, 0x04, 0x76, 0x57, 0x56,
+                                 0x52, 0x43, 0x4F, 0x52, 0x45, 0x30,
+                                 0x01, 0x01, 0x01};
+
     public static final byte CORE_APPLET_SLOTS_INTERFACE = 0;
 
     private Slots mSlots;
@@ -53,18 +57,8 @@ public class Weaver extends Applet {
      */
     @Override
     public boolean select() {
-        AID coreAid = JCSystem.lookupAID(CORE_APPLET_AID, (short) 0, (byte) CORE_APPLET_AID.length);
-        if (coreAid == null) {
-            return false;
-        }
-
-        mSlots = (Slots) JCSystem.getAppletShareableInterfaceObject(
-                coreAid, CORE_APPLET_SLOTS_INTERFACE);
-        if (mSlots == null) {
-            return false;
-        }
-
-        return true;
+      mSlots = null;
+      return true;
     }
 
     /**
@@ -75,6 +69,21 @@ public class Weaver extends Applet {
      */
     @Override
     public void process(APDU apdu) {
+        // TODO(drewry,ascull) Move this back into select.
+        if (mSlots == null) {
+            AID coreAid = JCSystem.lookupAID(CORE_APPLET_AID, (short) 0, (byte) CORE_APPLET_AID.length);
+            if (coreAid == null) {
+                ISOException.throwIt((short)0x0010);
+            }
+
+            mSlots = (Slots) JCSystem.getAppletShareableInterfaceObject(
+                    coreAid, CORE_APPLET_SLOTS_INTERFACE);
+            if (mSlots == null) {
+                ISOException.throwIt((short)0x0012);
+            }
+        }
+
+
         final byte buffer[] = apdu.getBuffer();
         final byte cla = buffer[ISO7816.OFFSET_CLA];
         final byte ins = buffer[ISO7816.OFFSET_INS];
