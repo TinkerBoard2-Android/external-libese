@@ -14,8 +14,18 @@
 // limitations under the License.
 //
 
-subdirs = [
-    "ese_ls_provision",
-    "ese_relay",
-    "ese_replay",
-]
+cc_binary {
+    name: "ese-ls-provision",
+    proprietary: true,
+    host_supported: false,
+    target: {
+        darwin: {
+            enabled: false,
+        },
+    },
+    cflags: ["-DNXP_LDR_SVC_VER_2=TRUE"],
+    shared_libs: [
+        "libbase", "libese", "libese-hw-nxp-pn80t-nq-nci", "libese-teq1", "libp61-jcop-kit"],
+    srcs: ["ese_ls_provision.cpp"],
+}
+
