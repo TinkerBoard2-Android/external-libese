@@ -23,7 +23,8 @@ import javacard.framework.Shareable;
 
 class WeaverCore extends Applet {
     public static final byte[] COMMAPP_APPLET_AID
-            = new byte[] {(byte) 0xa0, 0x00, 0x00, 0x00, 0x62, 0x03, 0x01, 0x0c, 0x01, 0x01};
+            = new byte[] {(byte) 0xA0, 0x00, 0x00, 0x04, 0x76, 0x57, 0x56,
+                                 0x52, 0x43, 0x4F, 0x4D, 0x4D, 0x30};
 
     private CoreSlots mSlots;
 
@@ -45,14 +46,6 @@ class WeaverCore extends Applet {
     }
 
     /**
-     * This applet can only be accessed from other applets.
-     */
-    @Override
-    public boolean select() {
-        return false;
-    }
-
-    /**
      * Returns and instance of the {@link Slots} interface.
      *
      * @param AID The requesting applet's AID must be that of the CoreApp.
@@ -60,7 +53,7 @@ class WeaverCore extends Applet {
      */
     @Override
     public Shareable getShareableInterfaceObject(AID clientAid, byte arg) {
-        if (!clientAid.equals(COMMAPP_APPLET_AID, (short) 0, (byte) COMMAPP_APPLET_AID.length)) {
+        if (!clientAid.partialEquals(COMMAPP_APPLET_AID, (short) 0, (byte) COMMAPP_APPLET_AID.length)) {
             return null;
         }
         return (arg == 0) ? mSlots : null;
