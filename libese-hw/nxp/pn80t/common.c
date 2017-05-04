@@ -42,8 +42,11 @@ int nxp_pn80t_preprocess(const struct Teq1ProtocolOptions *const opts,
 static const struct Teq1ProtocolOptions kTeq1Options = {
     .host_address = 0xA5,
     .node_address = 0x5A,
-    .bwt = 1.624f,   /* cwt by default would be ~8k * 1.05s */
-    .etu = 0.00105f, /* seconds */
+    .bwt = 1.624f, /* cwt by default would be ~8k * 1.05s */
+    /* 1.05ms is the vendor defined ETU.  However, we use this
+     * for polling and 7 * etu (7ms) is a long time to wait
+     * between poll attempts so we divided by 7. */
+    .etu = 0.00015f, /* elementary time unit, in seconds */
     .preprocess = &nxp_pn80t_preprocess,
 };
 
@@ -84,19 +87,28 @@ int nxp_pn80t_open(struct EseInterface *ese, void *board) {
   }
   /* Power on eSE */
   platform->toggle_reset(ns->handle, 1);
-  /* Let the eSE boot. */
-  platform->wait(ns->handle, 5000);
   return 0;
 }
+
+/* Used for soft-reset when possible. */
+uint32_t nxp_pn80t_send_cooldown(struct EseInterface *ese, bool end);
 
 int nxp_pn80t_reset(struct EseInterface *ese) {
   const struct Pn80tPlatform *platform = ese->ops->opts;
   struct NxpState *ns = NXP_PN80T_STATE(ese);
+
+  /* Attempt a soft reset, but if it fails, then do a hard reset.  */
+  if (!ese_error(ese)) {
+    const uint32_t cooldownSec = nxp_pn80t_send_cooldown(ese, false);
+    if (!ese_error(ese)) {
+      return 0;
+    }
+  }
+
   if (platform->toggle_reset(ns->handle, 0) < 0) {
     ese_set_error(ese, kNxpPn80tErrorResetToggle);
     return -1;
   }
-  platform->wait(ns->handle, 1000);
   if (platform->toggle_reset(ns->handle, 1) < 0) {
     ese_set_error(ese, kNxpPn80tErrorResetToggle);
     return -1;
@@ -109,7 +121,8 @@ int nxp_pn80t_poll(struct EseInterface *ese, uint8_t poll_for, float timeout,
   struct NxpState *ns = NXP_PN80T_STATE(ese);
   const struct Pn80tPlatform *platform = ese->ops->opts;
   /* Attempt to read a 8-bit character once per 8-bit character transmission
-   * window (in seconds). */
+   * window (in seconds).
+   */
   int intervals = (int)(0.5f + timeout / (7.0f * kTeq1Options.etu));
   uint8_t byte = 0xff;
   ALOGV("interface polling for start of frame/host node address: %x", poll_for);
@@ -152,23 +165,36 @@ int nxp_pn80t_poll(struct EseInterface *ese, uint8_t poll_for, float timeout,
 #define ATTACK_COUNTER 0xF2
 #define RESTRICTED_MODE_PENALTY 0xF3
 uint32_t nxp_pn80t_send_cooldown(struct EseInterface *ese, bool end) {
-  if (ese->error.is_err) {
-    return 0;
-  }
-
   const static uint8_t kEndofApduSession[] = {0x5a, 0xc5, 0x00, 0xc5};
   const static uint8_t kResetSession[] = {0x5a, 0xc4, 0x00, 0xc4};
   const uint8_t *const message = end ? kEndofApduSession : kResetSession;
   const uint32_t message_len =
       end ? sizeof(kEndofApduSession) : sizeof(kResetSession);
+
+  if (ese_error(ese)) {
+    return 0;
+  }
+
   ese->ops->hw_transmit(ese, message, message_len, 1);
+  if (ese_error(ese)) {
+    ALOGE("failed to transmit cooldown check");
+    return 0;
+  }
 
   nxp_pn80t_poll(ese, kTeq1Options.host_address, 5.0f, 0);
+  if (ese_error(ese)) {
+    ALOGE("failed to poll during cooldown");
+    return 0;
+  }
   uint8_t rx_buf[32];
   const uint32_t bytes_read =
       ese->ops->hw_receive(ese, rx_buf, sizeof(rx_buf), 1);
-  ALOGI("Requested power-down delay times (sec):");
+  if (ese_error(ese)) {
+    ALOGE("failed to receive cooldown response");
+    return 0;
+  }
 
+  ALOGI("Requested power-down delay times (sec):");
   /* For each tag type, walk the response to extract the value. */
   uint32_t max_wait = 0;
   if (bytes_read >= 0x8 && rx_buf[0] == 0xe5 && rx_buf[1] == 0x12) {
@@ -177,24 +203,24 @@ uint32_t nxp_pn80t_send_cooldown(struct EseInterface *ese, bool end) {
       const uint8_t tag = *tag_ptr;
       const uint8_t length = *(tag_ptr + 1);
 
-      // The cooldown timers are 32-bit values
-      if (length == 4) {
+      /* The cooldown timers are 32-bit values. */
+      if (length == sizeof(uint32_t)) {
         const uint32_t *const value_ptr = (uint32_t *)(tag_ptr + 2);
         uint32_t cooldown = ese_be32toh(*value_ptr);
         switch (tag) {
-        case ATTACK_COUNTER:
-          // This cooldown timer is in minutes, so convert it to seconds
-          cooldown *= 60;
-        // Fallthrough
-        case SECURE_TIMER:
         case RESTRICTED_MODE_PENALTY:
+          /* This timer is in minutes, so convert it to seconds. */
+          cooldown *= 60;
+        /* Fallthrough */
+        case SECURE_TIMER:
+        case ATTACK_COUNTER:
           ALOGI("- Timer 0x%.2X: %d", tag, cooldown);
           if (cooldown > max_wait) {
             max_wait = cooldown;
           }
           break;
         default:
-          // Ignore -- not a cooldown timer
+          /* Ignore -- not a known tag. */
           break;
         }
       }
@@ -230,7 +256,6 @@ uint32_t nxp_pn80t_handle_interface_call(struct EseInterface *ese,
   case kResetCommand:
     ALOGI("interface command received: reset");
     if (nxp_pn80t_reset(ese) < 0) {
-      /* TODO(wad): wire up a call to hw_reset and teq1_reset */
       /* Warning, state unchanged error. */
       ok[0] = 0x62;
     }
@@ -255,6 +280,10 @@ uint32_t nxp_pn80t_handle_interface_call(struct EseInterface *ese,
     uint8_t reply[6] = {0, 0, 0, 0, 0x90, 0x00};
     const uint32_t cooldownSec = nxp_pn80t_send_cooldown(ese, false);
     *(uint32_t *)(&reply[0]) = ese_htole32(cooldownSec);
+    if (ese_error(ese)) {
+      /* Return SW_UKNOWN on an ese failure. */
+      reply[sizeof(reply) - 2] = 0x6f;
+    }
     return ese_sg_from_buf(rx_buf, rx_len, 0, sizeof(reply), reply);
   }
   return 0;
@@ -276,14 +305,13 @@ void nxp_pn80t_close(struct EseInterface *ese) {
   ALOGV("%s: called", __func__);
   struct NxpState *ns = NXP_PN80T_STATE(ese);
   const struct Pn80tPlatform *platform = ese->ops->opts;
-  const uint32_t wait_sec =
-      ese->error.is_err ? 0 : nxp_pn80t_send_cooldown(ese, true);
+  const uint32_t wait_sec = nxp_pn80t_send_cooldown(ese, true);
 
-  /* In practice, this should probably migrate into the kernel
-   * and into the spidev code such that each platform can handle it
-   * as needed.
+  /* After the cooldown, the device should go to sleep.
+   * There is no need to pull the power explicitly unless
+   * we're in an error state.
    */
-  if (wait_sec == 0) {
+  if (ese_error(ese)) {
     platform->toggle_reset(ns->handle, 0);
     if (platform->toggle_power_req) {
       platform->toggle_power_req(ns->handle, 0);
