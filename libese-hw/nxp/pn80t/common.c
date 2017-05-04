@@ -50,13 +50,8 @@ static const struct Teq1ProtocolOptions kTeq1Options = {
 int nxp_pn80t_open(struct EseInterface *ese, void *board) {
   struct NxpState *ns;
   const struct Pn80tPlatform *platform;
-  if (sizeof(ese->pad) < sizeof(struct NxpState *)) {
-    /* This is a compile-time correctable error only. */
-    ALOGE("Pad size too small to use NXP HW (%zu < %zu)", sizeof(ese->pad),
-          sizeof(struct NxpState));
-    ese_set_error(ese, kNxpPn80tErrorPlatformInit);
-    return -1;
-  }
+  _static_assert(sizeof(ese->pad) >= sizeof(struct NxpState *),
+                 "Pad size too small to use NXP HW");
   platform = ese->ops->opts;
 
   /* Ensure all required functions exist */
