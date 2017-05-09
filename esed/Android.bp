@@ -45,6 +45,7 @@ cc_binary {
     shared_libs: [
         "android.hardware.weaver@1.0",
         "android.hardware.oemlock@1.0",
+        "libese",
         "libbase",
         "libese-app-boot",
         "libese_cpp_nxp_pn80t_nq_nci",
