@@ -39,6 +39,7 @@ cc_binary {
     init_rc = ["esed.rc"],
     defaults: ["esed_defaults"],
     shared_libs: [
+        "libese",
         "libbase",
         "libese_cpp_nxp_pn80t_nq_nci",
         "libhidlbase",
