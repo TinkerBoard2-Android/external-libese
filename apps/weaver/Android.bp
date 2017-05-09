@@ -26,6 +26,7 @@ cc_test {
     defaults: ["libese-app-defaults"],
     srcs: ["tests/weaver_test.cpp"],
     shared_libs: [
+        "libese",
         "libese-app-weaver",
         "libese_cpp_nxp_pn80t_nq_nci",
     ],
