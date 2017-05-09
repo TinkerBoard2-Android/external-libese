@@ -64,7 +64,6 @@ const uint8_t kEseBootRollbackSlotCount = 8;
  */
 const uint16_t kEseBootOwnerKeyMax = 2048;
 
-
 /* Keep in sync with card/src/com/android/verifiedboot/storage/Storage.java */
 /**
  * This enum reflects the types of Locks that are supported by
