@@ -20,20 +20,9 @@
 #include <tuple>
 
 #include <android-base/logging.h>
-#include <utils/String8.h>
 
 #include "../apps/weaver/include/ese/app/weaver.h"
 #include "ScopedEseConnection.h"
-
-// libutils
-using android::String8;
-
-namespace {
-
-const String8 WRONG_KEY_SIZE_MSG = String8{"Key must be 16 bytes"};
-const String8 WRONG_VALUE_SIZE_MSG = String8{"Value must be 16 bytes"};
-
-} // namespace
 
 namespace android {
 namespace esed {
@@ -94,10 +83,13 @@ Return<WeaverStatus> Weaver::write(uint32_t slotId, const hidl_vec<uint8_t>& key
     ese.init();
     // Validate the key and value sizes
     if (key.size() != kEseWeaverKeySize) {
-        return Status::fromExceptionCode(Status::EX_ILLEGAL_ARGUMENT, WRONG_KEY_SIZE_MSG);
+        LOG(ERROR) << "Key size must be " << kEseWeaverKeySize << ", not" << key.size() << " bytes";
+        return WeaverStatus::FAILED;
     }
     if (value.size() != kEseWeaverValueSize) {
-        return Status::fromExceptionCode(Status::EX_ILLEGAL_ARGUMENT, WRONG_VALUE_SIZE_MSG);
+        LOG(ERROR) << "Value size must be " << kEseWeaverValueSize << ", not" << value.size()
+                   << " bytes";
+        return WeaverStatus::FAILED;
     }
 
     // Open SE session for applet
@@ -125,7 +117,9 @@ Return<void> Weaver::read(uint32_t slotId, const hidl_vec<uint8_t>& key, read_cb
 
     // Validate the key size
     if (key.size() != kEseWeaverKeySize) {
-        return Status::fromExceptionCode(Status::EX_ILLEGAL_ARGUMENT, WRONG_KEY_SIZE_MSG);
+        LOG(ERROR) << "Key size must be " << kEseWeaverKeySize << ", not" << key.size() << " bytes";
+        _hidl_cb(WeaverReadStatus::FAILED, WeaverReadResponse{});
+        return Void();
     }
 
     // Open SE session for applet
