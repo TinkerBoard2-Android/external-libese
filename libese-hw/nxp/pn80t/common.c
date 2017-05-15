@@ -308,10 +308,10 @@ void nxp_pn80t_close(struct EseInterface *ese) {
   const uint32_t wait_sec = nxp_pn80t_send_cooldown(ese, true);
 
   /* After the cooldown, the device should go to sleep.
-   * There is no need to pull the power explicitly unless
-   * we're in an error state.
+   * If not post-use time is required, power down to ensure
+   * that the device is powered down when the OS is not on.
    */
-  if (ese_error(ese)) {
+  if (ese_error(ese) || wait_sec == 0) {
     platform->toggle_reset(ns->handle, 0);
     if (platform->toggle_power_req) {
       platform->toggle_power_req(ns->handle, 0);
