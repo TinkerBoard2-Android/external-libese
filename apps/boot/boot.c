@@ -38,6 +38,9 @@ const uint8_t kSetProduction[] = {0x80, 0x0a};
 const uint8_t kCarrierLockTest[] = {0x80, 0x0c, 0x00, 0x00};
 const uint8_t kFactoryReset[] = {0x80, 0x0e, 0x00, 0x00};
 const uint8_t kLockReset[] = {0x80, 0x0e, 0x01, 0x00};
+const uint8_t kLoadMetaClear[] = {0x80, 0x10, 0x00, 0x00};
+const uint8_t kLoadMetaAppend[] = {0x80, 0x10, 0x01, 0x00};
+static const uint16_t kMaxMetadataLoadSize = 1024;
 
 EseAppResult check_apdu_status(uint8_t code[2]) {
   if (code[0] == 0x90 && code[1] == 0x00) {
@@ -206,7 +209,7 @@ ESE_API EseAppResult ese_boot_lock_xget(struct EseBootSession *session,
 
   rx_len = ese_transceive_sg(session->ese, tx, 4, rx, 3);
   if (rx_len < 2 || ese_error(session->ese)) {
-    ALOGE("Failed to read lock state (%d).", lock);
+    ALOGE("ese_boot_lock_xget: failed to read lock state (%d)", lock);
     return ESE_APP_RESULT_ERROR_COMM_FAILED;
   }
   if (rx_len == 2) {
@@ -217,7 +220,8 @@ ESE_API EseAppResult ese_boot_lock_xget(struct EseBootSession *session,
   // Expect the full payload plus the aplet status and the completion code.
   *length = (uint16_t)(rx_len - 4);
   if (rx_len == 4) {
-    ALOGE("Received applet error code %x %x", lockData[0], lockData[1]);
+    ALOGE("ese_boot_lock_xget: received applet error code %x %x", lockData[0],
+          lockData[1]);
     return ese_make_app_result(lockData[0], lockData[1]);
   }
   return ESE_APP_RESULT_OK;
@@ -250,21 +254,21 @@ ESE_API EseAppResult ese_boot_lock_get(struct EseBootSession *session,
 
   rx_len = ese_transceive_sg(session->ese, tx, 3, rx, 1);
   if (rx_len < 2 || ese_error(session->ese)) {
-    ALOGE("Failed to read lock state (%d).", lock);
+    ALOGE("ese_boot_lock_get: failed to read lock state (%d).", lock);
     return ESE_APP_RESULT_ERROR_COMM_FAILED;
   }
   EseAppResult ret = check_apdu_status(&reply[rx_len - 2]);
   if (ret != ESE_APP_RESULT_OK) {
-    ALOGE("Get lock state returned a SE OS error.");
+    ALOGE("ese_boot_lock_get: SE OS error.");
     return ret;
   }
   if (rx_len < 5) {
-    ALOGE("Get lock state did not receive enough data.");
+    ALOGE("ese_boot_lock_get: communication error");
     return ESE_APP_RESULT_ERROR_COMM_FAILED;
   }
   // TODO: unify in the applet, then map them here.
   if (reply[0] != 0x0 && reply[1] != 0x0) {
-    ALOGE("INS_GET_LOCK: Applet error: %x %x", reply[0], reply[1]);
+    ALOGE("ese_boot_lock_get: Applet error: %x %x", reply[0], reply[1]);
     return ese_make_app_result(reply[0], reply[1]);
   }
   if (lockVal) {
@@ -278,11 +282,96 @@ ESE_API EseAppResult ese_boot_lock_get(struct EseBootSession *session,
   return ESE_APP_RESULT_FALSE;
 }
 
+EseAppResult ese_boot_meta_clear(struct EseBootSession *session) {
+  struct EseSgBuffer tx[2];
+  struct EseSgBuffer rx[1];
+  int rx_len;
+  if (!session || !session->ese || !session->active) {
+    return ESE_APP_RESULT_ERROR_ARGUMENTS;
+  }
+
+  uint8_t chan = kLoadMetaClear[0] | session->channel_id;
+  tx[0].base = &chan;
+  tx[0].len = 1;
+  tx[1].base = (uint8_t *)&kLoadMetaClear[1];
+  tx[1].len = sizeof(kLoadMetaClear) - 1;
+
+  uint8_t reply[4]; // App reply or APDU error.
+  rx[0].base = &reply[0];
+  rx[0].len = sizeof(reply);
+
+  rx_len = ese_transceive_sg(session->ese, tx, 2, rx, 1);
+  if (rx_len < 2 || ese_error(session->ese)) {
+    ALOGE("ese_boot_meta_clear: communication failure");
+    return ESE_APP_RESULT_ERROR_COMM_FAILED;
+  }
+  // Expect the full payload plus the applet status and the completion code.
+  if (rx_len < 4) {
+    ALOGE("ese_boot_meta_clear: SE exception");
+    EseAppResult ret = check_apdu_status(&reply[rx_len - 2]);
+    return ret;
+  }
+  if (reply[0] != 0x0 || reply[1] != 0x0) {
+    ALOGE("ese_boot_meta_clear: received applet error code %.2x %.2x", reply[0],
+          reply[1]);
+    return ese_make_app_result(reply[0], reply[1]);
+  }
+  return ESE_APP_RESULT_OK;
+}
+
+EseAppResult ese_boot_meta_append(struct EseBootSession *session,
+                                  const uint8_t *data, uint16_t dataLen) {
+  struct EseSgBuffer tx[4];
+  struct EseSgBuffer rx[1];
+  int rx_len;
+  if (!session || !session->ese || !session->active) {
+    return ESE_APP_RESULT_ERROR_ARGUMENTS;
+  }
+  if (dataLen > kMaxMetadataLoadSize) {
+    ALOGE("ese_boot_meta_append: too much data provided");
+    return ESE_APP_RESULT_ERROR_ARGUMENTS;
+  }
+
+  uint8_t chan = kLoadMetaAppend[0] | session->channel_id;
+  tx[0].base = &chan;
+  tx[0].len = 1;
+  tx[1].base = (uint8_t *)&kLoadMetaAppend[1];
+  tx[1].len = sizeof(kLoadMetaAppend) - 1;
+
+  uint8_t apdu_len[] = {0x0, (dataLen >> 8), (dataLen & 0xff)};
+  tx[2].base = &apdu_len[0];
+  tx[2].len = sizeof(apdu_len);
+  tx[3].c_base = data;
+  tx[3].len = dataLen;
+
+  uint8_t reply[4]; // App reply or APDU error.
+  rx[0].base = &reply[0];
+  rx[0].len = sizeof(reply);
+
+  rx_len = ese_transceive_sg(session->ese, tx, 4, rx, 1);
+  if (rx_len < 2 || ese_error(session->ese)) {
+    ALOGE("ese_boot_meta_append: communication failure");
+    return ESE_APP_RESULT_ERROR_COMM_FAILED;
+  }
+  // Expect the full payload plus the applet status and the completion code.
+  if (rx_len < 4) {
+    ALOGE("ese_boot_meta_append: SE exception");
+    EseAppResult ret = check_apdu_status(&reply[rx_len - 2]);
+    return ret;
+  }
+  if (reply[0] != 0x0 || reply[1] != 0x0) {
+    ALOGE("ese_boot_meta_append: received applet error code %.2x %.2x",
+          reply[0], reply[1]);
+    return ese_make_app_result(reply[0], reply[1]);
+  }
+  return ESE_APP_RESULT_OK;
+}
+
 ESE_API EseAppResult ese_boot_lock_xset(struct EseBootSession *session,
                                         EseBootLockId lockId,
                                         const uint8_t *lockData,
                                         uint16_t dataLen) {
-  struct EseSgBuffer tx[5];
+  struct EseSgBuffer tx[3];
   struct EseSgBuffer rx[1];
   int rx_len;
   if (!session || !session->ese || !session->active) {
@@ -292,9 +381,31 @@ ESE_API EseAppResult ese_boot_lock_xset(struct EseBootSession *session,
     return ESE_APP_RESULT_ERROR_ARGUMENTS;
   }
   if (dataLen < 1 || dataLen > kEseBootOwnerKeyMax + 1) {
-    ALOGE("set_lock_with_meta: too much data: %hu > %d", dataLen,
+    ALOGE("ese_boot_lock_xset: too much data: %hu > %d", dataLen,
           kEseBootOwnerKeyMax + 1);
     return ESE_APP_RESULT_ERROR_ARGUMENTS;
+  }
+
+  // Locks with metadata require a multi-step upload to meet the
+  // constraints of the transport.
+  EseAppResult res = ese_boot_meta_clear(session);
+  if (res != ESE_APP_RESULT_OK) {
+    ALOGE("ese_boot_lock_xset: unable to clear scratch metadata");
+    return res;
+  }
+  // The first byte is the lock value itself, so we skip it.
+  const uint8_t *cursor = &lockData[1];
+  uint16_t remaining = dataLen - 1;
+  while (remaining > 0) {
+    uint16_t chunk = (512 < remaining) ? 512 : remaining;
+    res = ese_boot_meta_append(session, cursor, chunk);
+    ALOGI("ese_boot_lock_xset: sending chunk %x", remaining);
+    if (res != ESE_APP_RESULT_OK) {
+      ALOGE("ese_boot_lock_xset: unable to upload metadata");
+      return res;
+    }
+    remaining -= chunk;
+    cursor += chunk;
   }
 
   uint8_t chan = kSetLockState[0] | session->channel_id;
@@ -303,25 +414,17 @@ ESE_API EseAppResult ese_boot_lock_xset(struct EseBootSession *session,
   tx[1].base = (uint8_t *)&kSetLockState[1];
   tx[1].len = 1;
 
-  uint8_t p1p2[] = {lockId, lockData[0]};
-  tx[2].base = &p1p2[0];
-  tx[2].len = sizeof(p1p2);
-  dataLen--;
-
-  uint8_t apdu_len[] = {0x0, (dataLen >> 8), (dataLen & 0xff)};
-  tx[3].base = &apdu_len[0];
-  tx[3].len = sizeof(apdu_len);
-
-  tx[4].c_base = &lockData[1];
-  tx[4].len = dataLen;
+  uint8_t lockIdLockValueUseMeta[] = {lockId, lockData[0], 0x1, 0x1};
+  tx[2].base = &lockIdLockValueUseMeta[0];
+  tx[2].len = sizeof(lockIdLockValueUseMeta);
 
   uint8_t reply[4]; // App reply or APDU error.
   rx[0].base = &reply[0];
   rx[0].len = sizeof(reply);
 
-  rx_len = ese_transceive_sg(session->ese, tx, 5, rx, 1);
+  rx_len = ese_transceive_sg(session->ese, tx, 3, rx, 1);
   if (rx_len < 2 || ese_error(session->ese)) {
-    ALOGE("Failed to set lock state (%d).", lockId);
+    ALOGE("ese_boot_lock_xset: failed to set lock state (%d).", lockId);
     return ESE_APP_RESULT_ERROR_COMM_FAILED;
   }
   if (rx_len == 2) {
@@ -329,13 +432,14 @@ ESE_API EseAppResult ese_boot_lock_xset(struct EseBootSession *session,
     EseAppResult ret = check_apdu_status(&reply[0]);
     return ret;
   }
-  // Expect the full payload plus the aplet status and the completion code.
+  // Expect the full payload plus the applet status and the completion code.
   if (rx_len != 4) {
-    ALOGE("Get lock state did not receive enough data: %d", rx_len);
+    ALOGE("ese_boot_lock_xset: communication error");
     return ESE_APP_RESULT_ERROR_COMM_FAILED;
   }
   if (reply[0] != 0x0 || reply[1] != 0x0) {
-    ALOGE("Received applet error code %x %x", reply[0], reply[1]);
+    ALOGE("ese_boot_lock_xset: received applet error code %x %x", reply[0],
+          reply[1]);
     return ese_make_app_result(reply[0], reply[1]);
   }
   return ESE_APP_RESULT_OK;
@@ -360,9 +464,9 @@ ESE_API EseAppResult ese_boot_lock_set(struct EseBootSession *session,
   tx[1].base = (uint8_t *)&kSetLockState[1];
   tx[1].len = 1;
 
-  uint8_t p1p2[] = {lockId, lockValue};
-  tx[2].base = &p1p2[0];
-  tx[2].len = sizeof(p1p2);
+  uint8_t lockIdLockValueNoMeta[] = {lockId, lockValue, 0x1, 0x0};
+  tx[2].base = &lockIdLockValueNoMeta[0];
+  tx[2].len = sizeof(lockIdLockValueNoMeta);
 
   uint8_t reply[4]; // App reply or APDU error.
   rx[0].base = &reply[0];
@@ -375,7 +479,7 @@ ESE_API EseAppResult ese_boot_lock_set(struct EseBootSession *session,
   }
   // Expect the full payload plus the applet status and the completion code.
   if (rx_len < 4) {
-    ALOGE("ese_boot_lock_xset: SE exception");
+    ALOGE("ese_boot_lock_set: SE exception");
     EseAppResult ret = check_apdu_status(&reply[rx_len - 2]);
     return ret;
   }
