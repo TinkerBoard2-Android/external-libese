@@ -66,6 +66,10 @@ public class Storage extends Applet implements ExtendedLength, Shareable {
      */
     private byte[] lockStorage;
     private LockInterface[] locks;
+    private byte[] reservedMetadata;
+    private byte[] metadata;
+    private short metadataLength;
+
     // Indices into locks[].
     private final static byte LOCK_CARRIER = (byte) 0x00;
     private final static byte LOCK_DEVICE = (byte) 0x01;
@@ -80,14 +84,19 @@ public class Storage extends Applet implements ExtendedLength, Shareable {
     private final static byte INS_SET_PRODUCTION = (byte) 0x0a;
     private final static byte INS_CARRIER_LOCK_TEST = (byte) 0x0c;
     private final static byte INS_RESET = (byte) 0x0e;
+    private final static byte INS_LOAD_META = (byte) 0x10;
 
     private final static byte RESET_FACTORY = (byte) 0x0;
     private final static byte RESET_LOCKS = (byte) 0x1;
+
+    private final static byte LOAD_META_CLEAR = (byte) 0x0;
+    private final static byte LOAD_META_APPEND = (byte) 0x1;
 
     private final static short NO_METADATA = (short) 0;
     private final static short NO_REQ_LOCKS = (short) 0;
     // Plenty of space for an owner key and any serialization.
     private final static short OWNER_LOCK_METADATA_SIZE = (short) 2048;
+    private final static short INCOMING_BYTES_MAX = (short) 1024;
 
     /**
      * Installs this applet.
@@ -123,6 +132,10 @@ public class Storage extends Applet implements ExtendedLength, Shareable {
                            versionStorage);
 
         lockStorage = new byte[4096];
+        // Reserve metadata for scratch if there's no transient
+        reservedMetadata = new byte[OWNER_LOCK_METADATA_SIZE];
+        metadata = null;
+
         // Initialize all supported locks here.
         locks = new LockInterface[4];
         // LOCK_CARRIER can be set only when not in production mode
@@ -198,7 +211,8 @@ public class Storage extends Applet implements ExtendedLength, Shareable {
      * VERSION (byte)
      * Length (short)
      * [global_state.OwnerInterface data]
-     *   inBootloader (byte)
+     *   inBootloaderRaw (byte)
+     *   inBootloader (boolean byte)
      *   production (byte)
      * [lock state]
      *   numLocks (byte)
@@ -220,7 +234,7 @@ public class Storage extends Applet implements ExtendedLength, Shareable {
         short resp = 0;
         byte i;
         short expectedLength = apdu.setOutgoing();
-        short length = (short)(2 + 1 + 2 + 1 + 1 + 1 + (2 * locks.length) +
+        short length = (short)(2 + 1 + 2 + 1 + 1 + 1 + 1 + (2 * locks.length) +
                                2 + lockStorage.length + 2);
         if (expectedLength < length) {
             // Error with length.
@@ -259,6 +273,14 @@ public class Storage extends Applet implements ExtendedLength, Shareable {
             Util.setShort(working, (short) 0, length);
             apdu.sendBytesLong(working, (short) 0, (short) 2);
             length -= 2;
+        } catch (CardRuntimeException e) {
+            ISOException.throwIt(length);
+        }
+
+        try {
+            working[0] = globalState.inBootloaderRaw();
+            apdu.sendBytesLong(working, (short) 0, (short) 1);
+            length--;
         } catch (CardRuntimeException e) {
             ISOException.throwIt(length);
         }
@@ -371,6 +393,50 @@ public class Storage extends Applet implements ExtendedLength, Shareable {
     }
 
     /**
+     * Fills the incoming buffer from APDU streams.
+     *
+     * @param apdu payload from the client.
+     * @param incoming buffer to fill from apdu buffer.
+     * @param iOffset starting offset into incoming.
+     * @param total total bytes to read from APDU.
+     * @return offset/length into incoming.
+     */
+    private short fillIncomingBuffer(APDU apdu, byte[] incoming, short iOffset, short available) {
+        final byte buffer[] = apdu.getBuffer();
+        final short cdataOffset = apdu.getOffsetCdata();
+        short sum = 0;
+        while (available > 0) {
+            Util.arrayCopyNonAtomic(buffer, cdataOffset,
+                           incoming, (short)(sum + iOffset), available);
+            sum += available;
+            try {
+              available = apdu.receiveBytes(cdataOffset);
+              if (sum > (short)(incoming.length - available)) {
+                available = (short)(incoming.length - sum);
+              }
+            } catch (CardRuntimeException e) {
+              available = 0;
+            }
+        }
+        return (short)(sum + iOffset);
+    }
+
+    public boolean select() {
+        metadataLength = (short) 0;
+        // Try to get the RAM needed.
+        if (metadata == null ||
+            metadata == reservedMetadata) {
+            try {
+                metadata = JCSystem.makeTransientByteArray(
+                        OWNER_LOCK_METADATA_SIZE,
+                        JCSystem.CLEAR_ON_DESELECT);
+            } catch (CardRuntimeException e) {
+                metadata = reservedMetadata;
+            }
+        }
+        return true;
+    }
+    /**
      * Handles incoming APDU requests
      *
      * @param apdu payload from the client.
@@ -391,9 +457,16 @@ public class Storage extends Applet implements ExtendedLength, Shareable {
             ISOException.throwIt(ISO7816.SW_CLA_NOT_SUPPORTED);
         }
 
-        short bytesRead = apdu.setIncomingAndReceive();
+        short availableBytes = apdu.setIncomingAndReceive();
         short numBytes = apdu.getIncomingLength();
         short cdataOffset = apdu.getOffsetCdata();
+
+        // Maximum possible transmission before triggering weirdness
+        // (really it is 6 * 254 - framing).
+        if (numBytes > INCOMING_BYTES_MAX) {
+          sendResponseCode(apdu, (short)0x0f00);
+          return;
+        }
 
         byte p1 = (byte)(buffer[ISO7816.OFFSET_P1] & (byte)0xff);
         byte p2 = (byte)(buffer[ISO7816.OFFSET_P2] & (byte)0xff);
@@ -435,22 +508,24 @@ public class Storage extends Applet implements ExtendedLength, Shareable {
                 sendResponseCode(apdu, resp);
             }
             return;
-        case INS_SET_LOCK: /* setlock(index, val) { data } */
+        case INS_SET_LOCK: /* setlock(index, val) { useMetadata(byte) } */
             if (p1 >= (byte)locks.length) {
                 sendResponseCode(apdu, (short)0x0100);
+                return;
             }
-
-            if (bytesRead == (short) 0) {
+            // useMetadata argument byte is required.
+            if (numBytes != 1) {
+                sendResponseCode(apdu, (short)0x0200);
+                return;
+            }
+            if (buffer[cdataOffset] == (byte) 0) {
                 resp = locks[p1].set(p2);
-             } else {
-                // Note, there may be more bytes to read than fit in the first pass.
-                // If so, we'll need to stage it in a transient buffer to pass in.
-                resp = (short) 0x0101;
-                if (bytesRead == numBytes) {
-                    resp = locks[p1].setWithMetadata(p2, buffer,
-                                                     cdataOffset,
-                                                     bytesRead);
-                }
+            } else if (buffer[cdataOffset] == (byte) 1) {
+                resp = locks[p1].setWithMetadata(p2, metadata,
+                                                 (short) 0,
+                                                 metadataLength);
+                // "Consume" the metadata even if an error occurred.
+                metadataLength = (short)0;
             }
             sendResponseCode(apdu, resp);
             return;
@@ -464,27 +539,67 @@ public class Storage extends Applet implements ExtendedLength, Shareable {
             return;
         /* carrierLockTest() { testVector } */
         case INS_CARRIER_LOCK_TEST:
-            // Note, there may be more bytes to read than fit in the first pass.
-            // If so, we'll need to stage it in a transient buffer to pass in.
-            if (numBytes != bytesRead) {
-                resp = 0x0100;
+            try {
+                short copied = fillIncomingBuffer(apdu, metadata, (short)0,
+                                                  availableBytes);
+                if (numBytes != copied) {
+                    // Declared length did not match read bytes.
+                    sendResponseCode(apdu, (short)0x0101);
+                    return;
+                }
+                resp = ((CarrierLock)locks[LOCK_CARRIER]).testVector(metadata,
+                    (short)0, copied);
+                sendResponseCode(apdu, resp);
+                return;
+            } catch (CardRuntimeException e) {
+                sendResponseCode(apdu, (short)0x0201);
+                return;
             }
-            resp = ((CarrierLock)locks[LOCK_CARRIER]).testVector(buffer, cdataOffset, bytesRead);
-            sendResponseCode(apdu, resp);
-            return;
         /* reset(0x0=factory 0x1=locks) {} */
         case INS_RESET:
             if (p1 != RESET_LOCKS) {
               /* Not implemented */
               resp = 0x0001;
               sendResponseCode(apdu, resp);
+              return;
             }
             if (globalState.production() == true) {
               resp = 0x0100;
               sendResponseCode(apdu, resp);
+              return;
             }
             Util.arrayFillNonAtomic(lockStorage, (short) 0,
                                     (short) lockStorage.length, (byte) 0x00);
+            return;
+        /* load_meta(new|append) {} */
+        case INS_LOAD_META:
+            if (p1 == LOAD_META_CLEAR) {
+                metadataLength = (short) 0;
+                sendResponseCode(apdu, (short) 0x0000);
+                return;
+            }
+            if (p1 != LOAD_META_APPEND) {
+                sendResponseCode(apdu, (short) 0x0100);
+                return;
+            }
+            try  {
+                // fillIncomingBuffer will only copy up to the length.
+                short copied = fillIncomingBuffer(apdu, metadata,
+                                                  metadataLength,
+                                                  availableBytes);
+                copied -= metadataLength; // just the new stuff
+                metadataLength += copied;
+                if (numBytes != copied) {
+                    // Could not read all the bytes -- the data is
+                    // copied though.
+                    sendResponseCode(apdu, (short)0x0101);
+                    return;
+                }
+            } catch (CardRuntimeException e) {
+                sendResponseCode(apdu, (short)0x0201);
+                return;
+            }
+            sendResponseCode(apdu, (short) 0x0000);
             return;
         default:
             ISOException.throwIt(ISO7816.SW_INS_NOT_SUPPORTED);

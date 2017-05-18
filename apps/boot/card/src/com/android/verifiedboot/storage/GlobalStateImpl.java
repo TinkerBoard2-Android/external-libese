@@ -34,6 +34,10 @@ class GlobalStateImpl implements OwnerInterface {
     // Used to track if a client needs to be renotified in case of a
     // power down, etc.
     final static byte CLIENT_STATE_CLEAR_PENDING = (byte)0x1;
+    // Scenario values
+    final static byte BOOTLOADER_UNDEFINED = (byte) 0xff;
+    final static byte BOOTLOADER_HIGH = (byte) 0x5a;
+    final static byte BOOTLOADER_LOW = (byte) 0xa5;
 
     private Object[] clientApplets;
     private byte[] clientAppletState;
@@ -224,14 +228,29 @@ class GlobalStateImpl implements OwnerInterface {
     @Override
     public boolean inBootloader() {
         try {
-            if (SystemInfo.getExternalState(SystemInfo.SYSTEMINFO_SCENARIO_0)
-                == (byte) 0x00) {
+            switch (SystemInfo.getExternalState(
+                    SystemInfo.SYSTEMINFO_SCENARIO_0)) {
+            case BOOTLOADER_HIGH:
+                return true;
+            case BOOTLOADER_LOW:
+            case BOOTLOADER_UNDEFINED:
+            default:
                 return false;
             }
-            return true;
         } catch (ISOException e) {
             // If we can't read it, we fail closed unless we're in debug mode.
             return false;
+        }
+    }
+
+    /**
+     * Returns the external signal that feeds inBootloader().
+     */
+    public byte inBootloaderRaw() {
+        try {
+            return SystemInfo.getExternalState(SystemInfo.SYSTEMINFO_SCENARIO_0);
+        } catch (ISOException e) {
+            return (byte) 0x0;
         }
     }
 

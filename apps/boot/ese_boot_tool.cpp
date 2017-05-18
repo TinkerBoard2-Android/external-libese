@@ -269,7 +269,7 @@ int handle_lock_state(struct EseBootSession *session, std::vector<std::string> &
   EseAppResult res;
   EseBootLockId lockId;
   uint16_t lockMetaLen = 0;
-  uint8_t lockMeta[1024];
+  uint8_t lockMeta[kEseBootOwnerKeyMax + 1];
   if (args[1] == "reset") {
     // No work.
   } else if (args[2] == "carrier") {
@@ -450,6 +450,7 @@ int main(int argc, char **argv) {
   if (res != ESE_APP_RESULT_OK) {
     fprintf(stderr, "failed to initiate session (%.8x)\n", res);
     handle_error(ese, res);
+    ese_close(&ese);
     return 1;
   }
   std::vector<std::string> args;

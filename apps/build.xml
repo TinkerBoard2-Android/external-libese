@@ -144,7 +144,7 @@
       <!-- Base version (Version + .1) for displacing a preinstalled package on early cards. -->
       <cap aid="A0000004765049584C424F4F540000"
            package="com.android.verifiedboot.storage"
-           version="2.1"
+           version="3.1"
            output="${out}/avb_storage_clobber.cap"
            sources="boot/card/src/com/android/verifiedboot"
            export="${build}/export/avb_storage">
@@ -164,9 +164,9 @@
         <import exps="${build}/export/avb_storage"/>
       </cap>
       <!-- 14th byte is the version. Increment on each release. -->
-      <cap aid="A0000004765049584C424F4F540200"
+      <cap aid="A0000004765049584C424F4F540300"
            package="com.android.verifiedboot.storage"
-           version="2.0"
+           version="3.0"
            output="${out}/avb_storage.cap"
            sources="boot/card/src/com/android/verifiedboot"
            export="${build}/export/avb_storage">
@@ -182,7 +182,7 @@
              16th byte is 01 for the applet.
           -->
         <applet class="com.android.verifiedboot.storage.Storage"
-                aid="A0000004765049584C424F4F54020101"/>
+                aid="A0000004765049584C424F4F54030101"/>
         <import exps="${build}/export/avb_storage"/>
       </cap>
     </javacard>
