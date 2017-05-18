@@ -126,10 +126,10 @@ static UINT8 ArrayOfAIDs[NOOFAIDS][LENOFAIDS] = {
 
 #define LS_ABORT_SW1        0x69
 #define LS_ABORT_SW2        0x87
-#define AID_MEM_PATH       "/data/nfc/AID_MEM.txt"
-#define LS_STATUS_PATH     "/data/nfc/LS_Status.txt"
-#define LS_SRC_BACKUP      "/data/nfc/LS_Src_Backup.txt"
-#define LS_DST_BACKUP      "/data/nfc/LS_Dst_Backup.txt"
+#define AID_MEM_PATH       "/data/vendor/ese/AID_MEM.txt"
+#define LS_STATUS_PATH     "/data/vendor/ese/LS_Status.txt"
+#define LS_SRC_BACKUP      "/data/vendor/ese/LS_Src_Backup.txt"
+#define LS_DST_BACKUP      "/data/vendor/ese/LS_Dst_Backup.txt"
 #define MAX_CERT_LEN        (255+137)
 
 #endif
