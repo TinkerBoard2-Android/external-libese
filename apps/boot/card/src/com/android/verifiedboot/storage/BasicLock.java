@@ -232,6 +232,25 @@ class BasicLock implements LockInterface {
     }
 
     /**
+     * Ensures any requiredLocks are unlocked.
+     * @return true if allowed or false if not.
+     */
+    public boolean prerequisitesMet() {
+        if (requiredLocks.length != 0) {
+            byte[] temp = new byte[1];
+            short resp = 0;
+            for (short l = 0; l < requiredLocks.length; ++l) {
+                resp = requiredLocks[l].get(temp, (short) 0);
+                // On error or not cleared, fail.
+                if (resp != 0 || temp[0] != (byte) 0x0) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    /**
      * {@inheritDoc}
      *
      * Returns 0x0 on success.
@@ -249,6 +268,10 @@ class BasicLock implements LockInterface {
                 return 0x0002;
             }
         }
+        // To relock, the lock must be unlocked, then relocked.
+        if (val != (byte)0 && storage[lockOffset()] != (byte)0) {
+            return 0x0005;
+        }
         if (globalState.production() == true) {
              // Enforce only when in production.
             if (onlyInBootloader == true) {
@@ -264,16 +287,8 @@ class BasicLock implements LockInterface {
                 }
             }
         }
-        if (requiredLocks.length != 0) {
-            byte[] temp = new byte[1];
-            short resp = 0;
-            for (short l = 0; l < requiredLocks.length; ++l) {
-                resp = requiredLocks[l].get(temp, (short) 0);
-                // On error or not cleared, fail.
-                if (resp != 0 || temp[0] != (byte) 0x0) {
-                    return 0x0a00;
-                }
-            }
+        if (prerequisitesMet() == false) {
+          return 0x0a00;
         }
         try {
             storage[storageOffset] = val;
@@ -298,20 +313,46 @@ class BasicLock implements LockInterface {
         }
         // No overruns, please.
         if (lockMetaLength > metadataLength()) {
-          return 0x0002;
+            return 0x0002;
+        }
+        // To relock, the lock must be unlocked, then relocked.
+        // This ensures that a lock like LOCK_OWNER cannot have its key value
+        // changed without first having the permission to unlock and lock again.
+        if (lockValue != (byte)0 && storage[lockOffset()] != (byte)0) {
+            return 0x0005;
         }
         if (metadataLength() == 0) {
-          return set(lockValue);
+            return set(lockValue);
+        }
+        // Before copying, ensure changing the lock state is currently permitted.
+        if (prerequisitesMet() == false) {
+          return 0x0a00;
         }
         try {
-            JCSystem.beginTransaction();
-            storage[lockOffset()] = lockValue;
-            Util.arrayCopy(lockMeta, lockMetaOffset,
-                           storage, metadataOffset(),
-                           lockMetaLength);
-            JCSystem.commitTransaction();
+            // When unlocking, do so before clearing the metadata.
+            if (lockValue == (byte) 0) {
+                JCSystem.beginTransaction();
+                storage[lockOffset()] = lockValue;
+                JCSystem.commitTransaction();
+            }
+            if (lockMetaLength == 0) {
+                // An empty lockMeta will clear the value.
+                Util.arrayFillNonAtomic(storage, metadataOffset(),
+                                        metadataLength(), (byte) 0x00);
+            } else {
+                Util.arrayCopyNonAtomic(lockMeta, lockMetaOffset,
+                                        storage, metadataOffset(),
+                                        lockMetaLength);
+            }
+            // When locking, do so after the copy as interrupting it will
+            // not impact its use in a locked state.
+            if (lockValue != (byte) 0) {
+                JCSystem.beginTransaction();
+                storage[lockOffset()] = lockValue;
+                JCSystem.commitTransaction();
+            }
         } catch (CardRuntimeException e) {
-            return 0x0003;
+            return 0x0004;
         }
         return 0;
     }
