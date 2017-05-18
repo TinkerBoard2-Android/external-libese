@@ -40,9 +40,9 @@ tJBL_STATUS (JcopOsDwnld::*JcopOs_dwnld_seqhandler[])(
    };
 
 pJcopOs_Dwnld_Context_t gpJcopOs_Dwnld_Context = NULL;
-static const char *path[3] = {"/data/nfc/JcopOs_Update1.apdu",
-                             "/data/nfc/JcopOs_Update2.apdu",
-                             "/data/nfc/JcopOs_Update3.apdu"};
+static const char *path[3] = {"/data/vendor/ese/JcopOs_Update1.apdu",
+                             "/data/vendor/ese/JcopOs_Update2.apdu",
+                             "/data/vendor/ese/JcopOs_Update3.apdu"};
 
 /*******************************************************************************
 **
