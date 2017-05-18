@@ -97,10 +97,16 @@ int nxp_pn80t_reset(struct EseInterface *ese) {
   const struct Pn80tPlatform *platform = ese->ops->opts;
   struct NxpState *ns = NXP_PN80T_STATE(ese);
 
-  /* Attempt a soft reset, but if it fails, then do a hard reset.  */
+  /* If there is no error, perform a soft reset.
+   * If there is no cooldown time associated, go ahead and do a real
+   * reset as there is no other interface to trigger a hard reset.
+   *
+   * This avoids pulling the power when a cooldown is in progress
+   * if it is at all possible to avoid.
+   */
   if (!ese_error(ese)) {
     const uint32_t cooldownSec = nxp_pn80t_send_cooldown(ese, false);
-    if (!ese_error(ese)) {
+    if (!ese_error(ese) && cooldownSec > 0) {
       return 0;
     }
   }
@@ -113,6 +119,9 @@ int nxp_pn80t_reset(struct EseInterface *ese) {
     ese_set_error(ese, kNxpPn80tErrorResetToggle);
     return -1;
   }
+
+  /* Start fresh with the reset. */
+  ese->error.is_err = false;
   return 0;
 }
 
@@ -255,6 +264,8 @@ uint32_t nxp_pn80t_handle_interface_call(struct EseInterface *ese,
   switch (buf[1]) {
   case kResetCommand:
     ALOGI("interface command received: reset");
+    /* Force a hard reset by setting an error on the hw. */
+    ese_set_error(ese, 0);
     if (nxp_pn80t_reset(ese) < 0) {
       /* Warning, state unchanged error. */
       ok[0] = 0x62;
