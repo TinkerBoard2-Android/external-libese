@@ -64,6 +64,12 @@ class CoreSlots implements Slots {
     }
 
     @Override
+    public void eraseValue(short rawSlotId) {
+        final short slotId = validateSlotId(rawSlotId);
+        mSlots[slotId].eraseValue();
+    }
+
+    @Override
     public void eraseAll() {
         for (short i = 0; i < NUM_SLOTS; ++i) {
             mSlots[i].erase();
@@ -105,6 +111,14 @@ class CoreSlots implements Slots {
             mFailureCount = 0;
             mBackoffTimer = DSTimer.getInstance();
             JCSystem.commitTransaction();
+        }
+
+        /**
+         * Clear the slot's value.
+         */
+        public void eraseValue() {
+            // This is intended to be destructive so a partial update is not a problem
+            Util.arrayFillNonAtomic(mValue, (short) 0, Consts.SLOT_VALUE_BYTES, (byte) 0);
         }
 
         /**
@@ -170,7 +184,7 @@ class CoreSlots implements Slots {
         }
 
         /**
-         * 3.0.3 does not offset Util.arrayFill
+         * 3.0.3 does not offer Util.arrayFill
          */
         private static void arrayFill(byte[] bArray, short bOff, short bLen, byte bValue) {
             for (short i = 0; i < bLen; ++i) {

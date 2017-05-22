@@ -114,6 +114,13 @@ EseAppResult ese_weaver_write(struct EseWeaverSession *session, uint32_t slotId,
 EseAppResult ese_weaver_read(struct EseWeaverSession *session, uint32_t slotId,
                              const uint8_t *key, uint8_t *value, uint32_t *timeout);
 
+/**
+ * Erase the value of a slot whilst maintaining the same key.
+ *
+ * @returns ESE_APP_RESULT_OK on success.
+ */
+EseAppResult ese_weaver_erase_value(struct EseWeaverSession *session, uint32_t slotId);
+
 #ifdef __cplusplus
 }  /* extern "C" */
 #endif

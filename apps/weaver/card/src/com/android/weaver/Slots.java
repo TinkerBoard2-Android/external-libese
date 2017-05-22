@@ -45,6 +45,16 @@ public interface Slots extends javacard.framework.Shareable {
      */
     byte read(short slotId, byte[] key, short keyOffset, byte[] value, short valueOffset);
 
-    /** Erases the contents of all slots. */
+    /**
+     * Set the value of the identified slot to all zeros whilst leaving the key untouched.
+     *
+     * This is used to destroy the secret stored in the slot but retain the ability to authenticate
+     * by comparing a challenege with the slot's key.
+     *
+     * @param slotId ID of the slot of which to erase the value.
+     */
+    void eraseValue(short slotId);
+
+    /** Erases the key and value of all slots. */
     void eraseAll();
 }

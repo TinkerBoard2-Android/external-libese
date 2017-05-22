@@ -113,6 +113,10 @@ public class Weaver extends Applet {
                 read(apdu);
                 return;
 
+            case Consts.INS_ERASE_VALUE:
+                eraseValue(apdu);
+                return;
+
             case Consts.INS_ERASE_ALL:
                 eraseAll(apdu);
                 return;
@@ -200,6 +204,25 @@ public class Weaver extends Applet {
             apdu.setOutgoingLength(failSize);
             apdu.sendBytes((short) 0, failSize);
         }
+    }
+
+    public static final short ERASE_VALUE_BYTES = Consts.SLOT_ID_BYTES;
+    private static final byte ERASE_VALUE_SLOT_ID_OFFSET = ISO7816.OFFSET_CDATA;
+
+    /**
+     * Erase the value of a slot.
+     *
+     * p1: 0
+     * p2: 0
+     * data: [slot ID]
+     */
+    private void eraseValue(APDU apdu) {
+        p1p2Unused(apdu);
+        receiveData(apdu, ERASE_VALUE_BYTES);
+
+        final byte buffer[] = apdu.getBuffer();
+        final short slotId = getSlotId(buffer, READ_DATA_SLOT_ID_OFFSET);
+        mSlots.eraseValue(slotId);
     }
 
     /**

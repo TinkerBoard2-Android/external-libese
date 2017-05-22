@@ -31,7 +31,8 @@ const uint8_t kWrite[] = {0x80, 0x04, 0x00, 0x00,
                               kEseWeaverValueSize}; // slotid + key + value
 const uint8_t kRead[] = {0x80, 0x06, 0x00, 0x00,
                          4 + kEseWeaverKeySize}; // slotid + key
-const uint8_t kEraseAll[] = {0x80, 0x08, 0x00, 0x00};
+const uint8_t kEraseValue[] = {0x80, 0x08, 0x00, 0x00, 4}; // slotid
+const uint8_t kEraseAll[] = {0x80, 0x0a, 0x00, 0x00};
 
 // Build 32-bit int from big endian bytes
 static uint32_t get_uint32(uint8_t buf[4]) {
@@ -357,6 +358,50 @@ ESE_API EseAppResult ese_weaver_read(struct EseWeaverSession *session,
     return ESE_APP_RESULT_ERROR_COMM_FAILED;
   }
   return ESE_APP_RESULT_OK;
+}
+
+ESE_API EseAppResult ese_weaver_erase_value(struct EseWeaverSession *session,
+                                            uint32_t slotId) {
+  if (!session || !session->ese || !session->active) {
+    return ESE_APP_RESULT_ERROR_ARGUMENTS;
+  }
+  if (!session->active || session->channel_id == 0) {
+    return ESE_APP_RESULT_ERROR_ARGUMENTS;
+  }
+
+  // Prepare data to send
+  struct EseSgBuffer tx[3];
+  uint8_t chan = kEraseValue[0] | session->channel_id;
+  tx[0].base = &chan;
+  tx[0].len = 1;
+  tx[1].base = (uint8_t *)&kEraseValue[1];
+  tx[1].len = sizeof(kEraseValue) - 1;
+
+  // Slot ID in big endian
+  uint8_t slot_id[4];
+  put_uint32(slot_id, slotId);
+  tx[2].base = slot_id;
+  tx[2].len = sizeof(slot_id);
+
+  // Prepare buffer for result
+  struct EseSgBuffer rx;
+  uint8_t rx_buf[2];
+  rx.base = rx_buf;
+  rx.len = sizeof(rx_buf);
+
+  // Send the command
+  const int rx_len = ese_transceive_sg(session->ese, tx, 3, &rx, 1);
+
+  // Check for errors
+  if (rx_len < 2 || ese_error(session->ese)) {
+    ALOGE("Failed to write to slot");
+    return ESE_APP_RESULT_ERROR_COMM_FAILED;
+  }
+  if (rx_len > 2) {
+    ALOGE("Unexpected response from Weaver applet");
+    return ESE_APP_RESULT_ERROR_COMM_FAILED;
+  }
+  return check_apdu_status(rx_buf);
 }
 
 // TODO: erase all, not currently used

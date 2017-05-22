@@ -80,3 +80,18 @@ TEST_F(WeaverTest, writeAndReadWithIncorrectKey) {
   ASSERT_NE(0, memcmp(VALUE, readValue, kEseWeaverValueSize));
   ASSERT_EQ(uint32_t{0}, timeout); // First timeout is 0
 }
+
+TEST_F(WeaverTest, writeAndEraseValue) {
+  const uint32_t slotId = 0;
+  ASSERT_EQ(ese_weaver_write(&mSession, slotId, KEY, VALUE), ESE_APP_RESULT_OK);
+  ASSERT_EQ(ese_weaver_erase_value(&mSession, slotId), ESE_APP_RESULT_OK);
+
+  // The read should be successful as the key is unchanged but the value should
+  // be all zeros
+  uint8_t readValue[kEseWeaverValueSize];
+  uint32_t timeout;
+  ASSERT_EQ(ESE_APP_RESULT_OK, ese_weaver_read(&mSession, slotId, KEY, readValue, &timeout));
+
+  const uint8_t expectedValue[kEseWeaverValueSize] = {0};
+  ASSERT_EQ(0, memcmp(readValue, expectedValue, kEseWeaverValueSize));
+}

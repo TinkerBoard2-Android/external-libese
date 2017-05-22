@@ -34,5 +34,6 @@ public class Consts {
     public static final byte INS_GET_NUM_SLOTS = 0x02;
     public static final byte INS_WRITE = 0x4;
     public static final byte INS_READ = 0x6;
-    public static final byte INS_ERASE_ALL = 0x8;
+    public static final byte INS_ERASE_VALUE = 0x8;
+    public static final byte INS_ERASE_ALL = 0xa;
 }
