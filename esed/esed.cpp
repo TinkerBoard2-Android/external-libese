@@ -26,7 +26,6 @@
 #include <esecpp/NxpPn80tNqNci.h>
 using EseInterfaceImpl = android::NxpPn80tNqNci;
 
-#include "OemLock.h"
 #include "Weaver.h"
 
 using android::OK;
@@ -38,7 +37,6 @@ using android::hardware::joinRpcThreadpool;
 using namespace std::chrono_literals;
 
 // HALs
-using android::esed::OemLock;
 using android::esed::Weaver;
 
 int main(int /* argc */, char** /* argv */) {
@@ -75,22 +73,13 @@ int main(int /* argc */, char** /* argv */) {
     constexpr bool thisThreadWillJoinPool = true;
     configureRpcThreadpool(1, thisThreadWillJoinPool);
 
-    // -- Instantiate other applet HALs here --
-    status_t status;
-
-    // Create OemLock HAL instance.
-    sp<OemLock> oemLock = new OemLock{ese};
-    status = oemLock->registerAsService();
-    if (status != OK) {
-        LOG(ERROR) << "Failed to register OemLock as a service (status: " << status << ")";
-    }
-
     // Create Weaver HAL instance
     sp<Weaver> weaver = new Weaver{ese};
-    status = weaver->registerAsService();
+    const status_t status = weaver->registerAsService();
     if (status != OK) {
         LOG(ERROR) << "Failed to register Weaver as a service (status: " << status << ")";
     }
+
 
     joinRpcThreadpool();
     return -1; // Should never reach here

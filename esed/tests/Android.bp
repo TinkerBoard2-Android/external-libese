@@ -20,12 +20,10 @@ cc_test {
     proprietary: true,
     srcs: [
         "weaver_integration_tests.cpp",
-        "oemlock_integration_tests.cpp",
     ],
     host_supported: false,
     shared_libs: [
         "android.hardware.weaver@1.0",
-        "android.hardware.oemlock@1.0",
         "libbase",
         "libhidlbase",
         "libhidltransport",

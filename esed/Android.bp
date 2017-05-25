@@ -38,13 +38,11 @@ cc_binary {
     srcs: [
         "esed.cpp",
         "Weaver.cpp",
-        "OemLock.cpp",
     ],
     init_rc = ["esed.rc"],
     defaults: ["esed_defaults"],
     shared_libs: [
         "android.hardware.weaver@1.0",
-        "android.hardware.oemlock@1.0",
         "libese",
         "libbase",
         "libese-app-boot",
