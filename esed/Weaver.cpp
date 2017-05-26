@@ -28,7 +28,6 @@ namespace android {
 namespace esed {
 
 // libhidl
-using ::android::hardware::Status;
 using ::android::hardware::Void;
 
 // HAL
