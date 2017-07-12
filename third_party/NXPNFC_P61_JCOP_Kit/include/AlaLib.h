@@ -23,6 +23,8 @@ extern "C" {
 #ifndef ALALIB_H_
 #define ALALIB_H_
 
+#include <stdio.h>
+
 #include "IChannel.h"
 
 /*******************************************************************************
