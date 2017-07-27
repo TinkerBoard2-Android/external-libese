@@ -280,11 +280,13 @@ uint8_t teq1_frame_error_check(struct Teq1State *state,
   case kPcbTypeSupervisory:
     if (rx_frame->header.PCB != S(RESYNC, RESPONSE) &&
         rx_frame->header.LEN != 1) {
+      ALOGE("Invalid supervisory RX frame.");
       return R(0, 1, 0);
     }
     break;
   case kPcbTypeReceiveReady:
     if (rx_frame->header.LEN != 0) {
+      ALOGE("Invalid ReceiveReady RX frame.");
       return R(0, 1, 0);
     }
     break;
@@ -296,6 +298,7 @@ uint8_t teq1_frame_error_check(struct Teq1State *state,
       ALOGW("Got seq %d expected %d",
             bs_get(PCB.I.send_seq, rx_frame->header.PCB),
             state->card_state->seq.card);
+      ALOGE("Invalid Info RX frame.");
       return R(0, 1, 0);
     }
     /* Update the card's last I-block seq. */
@@ -564,6 +567,8 @@ ESE_API uint32_t teq1_transceive(struct EseInterface *ese,
   struct Teq1Frame *tx = &tx_frame[0];
   int active = 0;
   bool was_reset = false;
+  bool needs_hw_reset = false;
+  int session_resets = 0;
   bool done = false;
   enum RuleResult result = kRuleResultComplete;
   uint32_t rx_total = ese_sg_length(rx_bufs, rx_segs);
@@ -623,6 +628,7 @@ ESE_API uint32_t teq1_transceive(struct EseInterface *ese,
       }
       ALOGE("More than three retransmits have occurred");
       if (tx->header.PCB == S(RESYNC, REQUEST)) {
+        /* More than three RESYNC retranmits have occurred. */
         ese_set_error(ese, kTeq1ErrorHardFail);
         return 0;
       }
@@ -632,8 +638,9 @@ ESE_API uint32_t teq1_transceive(struct EseInterface *ese,
     case kRuleResultContinue:
       active = !active;
       tx = &tx_frame[active];
+      /* Reset this to 0 to use the counter for RESYNC transmits. */
       state.retransmits = 0;
-      state.errors = 0;
+      /* Errors are not reset until the session is reset. */
       continue;
     case kRuleResultHardFail:
       ese_set_error(ese, kTeq1ErrorHardFail);
@@ -650,14 +657,25 @@ ESE_API uint32_t teq1_transceive(struct EseInterface *ese,
       tx = &tx_frame[!active];
       continue;
     case kRuleResultResetDevice:
-      if (was_reset || !ese->ops->hw_reset || ese->ops->hw_reset(ese) == -1) {
-        ese_set_error(ese, kTeq1ErrorDeviceReset);
-        return 0; /* Don't keep resetting -- hard fail. */
-      }
-      was_reset = true;
+      needs_hw_reset = true;
     /* Fall through to session reset. */
     case kRuleResultResetSession:
-      /* Roll back state and reset. */
+      /* Reset to initial state and possibly do hw reset */
+      if (session_resets++ > 4) {
+        /* If there have been more than 4 resyncs without a
+         * physical reset, we should pull the plug.
+         */
+        needs_hw_reset = true;
+      }
+      if (needs_hw_reset) {
+        needs_hw_reset = false;
+        if (was_reset || !ese->ops->hw_reset || ese->ops->hw_reset(ese) == -1) {
+          ese_set_error(ese, kTeq1ErrorDeviceReset);
+          return 0; /* Don't keep resetting -- hard fail. */
+        }
+        was_reset = true;
+        session_resets = 0;
+      }
       state = init_state;
       TEQ1_INIT_CARD_STATE(state.card_state);
       /* Reset the active frame. */
