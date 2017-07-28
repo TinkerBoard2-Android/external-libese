@@ -26,9 +26,12 @@
 #define LOG_TAG "TEQ1_UNITTESTS"
 #include <ese/log.h>
 
+#include "ese_operations_interface.h"
+#include "ese_operations_wrapper.h"
+
 #include "teq1_private.h"
 
-ESE_INCLUDE_HW(ESE_HW_FAKE);
+#define UNUSED(x) UNUSED_ ## x __attribute__((__unused__))
 
 using ::testing::Test;
 
@@ -366,6 +369,394 @@ TEST_F(Teq1ErrorHandlingTest, I00_I00_bad_lrc) {
     << "Actual next TX: " << teq1_pcb_to_name(tx_next_.header.PCB);
   EXPECT_EQ(kRuleResultSingleShot, result)
    << "Actual result name: " << teq1_rule_result_to_name(result);
+};
+
+static const struct Teq1ProtocolOptions kTeq1Options = {
+      .host_address = 0xA5,
+      .node_address = 0x5A,
+      .bwt = 1.624f,
+      .etu = 0.00015f, /* elementary time unit, in seconds */
+      .preprocess = NULL,
+};
+
+std::string to_hex(const std::vector<uint8_t>& data) {
+    static constexpr char hex[] = "0123456789ABCDEF";
+    std::string out;
+    out.reserve(data.size() * 2);
+    for (uint8_t c : data) {
+        out.push_back(hex[c / 16]);
+        out.push_back(hex[c % 16]);
+    }
+    return out;
+}
+
+class EseWireFake : public EseOperationsInterface {
+ public:
+  EseWireFake() : tx_cursor_(0), rx_cursor_(0) { }
+  virtual ~EseWireFake() = default;
+
+  virtual int EseOpen(struct EseInterface *UNUSED(ese), void *UNUSED(data)) {
+    return 0;
+  }
+  virtual int EseReset(struct EseInterface *UNUSED(ese)) {
+    ALOGI("EseReset called!"); // Add to invocations
+    // Using the RX cursor, check for a reset expected.
+    // This is on RX because the s(resync) global counter is on session resets.
+    EXPECT_EQ(1, invocations.at(tx_cursor_).expect_reset);
+    return 0;
+  }
+  virtual int EsePoll(struct EseInterface *UNUSED(ese), uint8_t UNUSED(poll_for),
+                      float UNUSED(timeout), int UNUSED(complete)) {
+    return 0;
+  }
+  virtual void EseClose(struct EseInterface *UNUSED(ese)) { };
+
+  virtual uint32_t EseTransceive(struct EseInterface *ese, const struct EseSgBuffer *tx_sg, uint32_t tx_nsg,
+                                 struct EseSgBuffer *rx_sg, uint32_t rx_nsg) {
+    rx_cursor_ = 0;
+    return teq1_transceive(ese, &kTeq1Options, tx_sg, tx_nsg, rx_sg, rx_nsg);
+  }
+
+  virtual uint32_t EseHwTransmit(struct EseInterface *UNUSED(ese), const uint8_t *data,
+                                 uint32_t len, int UNUSED(complete)) {
+    EXPECT_GT(invocations.size(), tx_cursor_);
+    if (invocations.size() <= tx_cursor_) {
+      return 0;
+    }
+    if (!len) {
+      return 0;
+    }
+    if (!invocations.size()) {
+      return 0;
+    }
+    // Just called once per teq1_transmit -- no partials.
+    const struct Invocation &invocation = invocations.at(tx_cursor_++);
+
+    EXPECT_EQ(invocation.expected_tx.size(), len);
+    int eq = memcmp(data, invocation.expected_tx.data(), len);
+    const std::vector<uint8_t> vec_data(data, data + len);
+    EXPECT_EQ(0, eq)
+        << "Got: '" << to_hex(vec_data) << "' "
+        << "Expected: '" << to_hex(invocation.expected_tx) << "'";
+
+    return len;
+  }
+
+  virtual uint32_t EseHwReceive(struct EseInterface *UNUSED(ese), uint8_t *data,
+                                uint32_t len, int UNUSED(complete)) {
+    if (!len) {
+      return 0;
+    }
+    // Get this calls expected data.
+    EXPECT_GT(invocations.size(), rx_cursor_);
+    if (!invocations.size())
+      return 0;
+    struct Invocation &invocation = invocations.at(rx_cursor_);
+
+    // Supply the golden return data and pop off the invocation.
+    // Allows partial reads from the invocation stack.
+    uint32_t rx_total = 0;
+    if (len <= invocation.rx.size()) {
+      rx_total = len;
+      memcpy(data, invocation.rx.data(), invocation.rx.size());
+    }
+    uint32_t remaining = invocation.rx.size() - rx_total;
+    if (remaining && rx_total) {
+      invocation.rx.erase(invocation.rx.begin(),
+                          invocation.rx.begin() + rx_total);
+    } else {
+      rx_cursor_++;
+      // RX shouldn't get ahead of TX.
+      EXPECT_GE(tx_cursor_, rx_cursor_);
+      // We could delete, but this make test bugs a little easier to see.
+    }
+    return rx_total;
+  }
+
+  struct Invocation {
+    std::vector<uint8_t> rx;
+    std::vector<uint8_t> expected_tx;
+    int expect_reset;
+  };
+
+  std::vector<Invocation> invocations;
+ private:
+  uint32_t tx_cursor_;
+  uint32_t rx_cursor_;
+};
+
+class Teq1TransceiveTest : public virtual Test {
+ public:
+  Teq1TransceiveTest() { }
+  virtual ~Teq1TransceiveTest() { }
+
+  void SetUp() {
+    // Configure ese with our internal ops.
+    EseOperationsWrapper::InitializeEse(&ese_, &wire_);
+    // Start with normal seq's.
+    TEQ1_INIT_CARD_STATE((struct Teq1CardState *)(&(ese_.pad[0])));
+  }
+
+  void TearDown() {
+    wire_.invocations.resize(0);
+  }
+
+ protected:
+  EseWireFake wire_;
+  EseInterface ese_;
+};
+
+
+TEST_F(Teq1TransceiveTest, NormalTransceiveUnchained) {
+  EXPECT_EQ(0, ese_open(&ese_, NULL));
+
+  // I(0,0) ->
+  //        <- I(0, 0)
+  wire_.invocations.resize(1);
+  struct Teq1Frame frame;
+  size_t frame_size = 0;
+  frame.header.NAD = kTeq1Options.node_address;
+  frame.header.PCB = TEQ1_I(0, 0);
+  frame.header.LEN = 4;
+  frame.INF[0] = 'A';
+  frame.INF[1] = 'B';
+  frame.INF[2] = 'C';
+  frame.INF[3] = 'D';
+  frame.INF[frame.header.LEN] = teq1_compute_LRC(&frame);
+  frame_size = sizeof(frame.header) + frame.header.LEN + 1;
+  wire_.invocations[0].expected_tx.resize(frame_size);
+  memcpy(wire_.invocations[0].expected_tx.data(), &frame.val[0], frame_size);
+  ALOGI("Planning to send:");
+  teq1_trace_transmit(frame.header.PCB, frame.header.LEN);
+
+  frame.header.LEN = 0;
+  frame.header.NAD = kTeq1Options.host_address;
+  frame.INF[frame.header.LEN] = teq1_compute_LRC(&frame);
+  frame_size = sizeof(frame.header) + frame.header.LEN + 1;
+  wire_.invocations[0].rx.resize(frame_size);
+  memcpy(wire_.invocations[0].rx.data(), &frame, frame_size);
+  ALOGI("Expecting to receive:");
+  teq1_trace_receive(frame.header.PCB, frame.header.LEN);
+
+  const uint8_t payload[] = { 'A', 'B', 'C', 'D' };
+  uint8_t reply[5];  // Should stay empty.
+  EXPECT_EQ(0, ese_transceive(&ese_, payload, sizeof(payload), reply, sizeof(reply)));
+};
+
+
+TEST_F(Teq1TransceiveTest, NormalUnchainedRetransmitRecovery) {
+  EXPECT_EQ(0, ese_open(&ese_, NULL));
+
+  // I(0,0) [4] ->
+  //            <- R(0, 1, 0)
+  // I(0,0) [4] ->
+  //            <- I(0, 0)
+  wire_.invocations.resize(2);
+  struct Teq1Frame frame;
+  size_t frame_size = 0;
+  frame.header.NAD = kTeq1Options.node_address;
+  frame.header.PCB = TEQ1_I(0, 0);
+  frame.header.LEN = 4;
+  frame.INF[0] = 'A';
+  frame.INF[1] = 'B';
+  frame.INF[2] = 'C';
+  frame.INF[3] = 'D';
+  frame.INF[frame.header.LEN] = teq1_compute_LRC(&frame);
+  frame_size = sizeof(frame.header) + frame.header.LEN + 1;
+  wire_.invocations[0].expected_tx.resize(frame_size);
+  memcpy(wire_.invocations[0].expected_tx.data(), &frame.val[0], frame_size);
+  wire_.invocations[1].expected_tx.resize(frame_size);
+  memcpy(wire_.invocations[1].expected_tx.data(), &frame.val[0], frame_size);
+
+  frame.header.LEN = 0;
+  frame.header.NAD = kTeq1Options.host_address;
+  frame.header.PCB = TEQ1_R(0, 1, 0);
+  frame.INF[frame.header.LEN] = teq1_compute_LRC(&frame);
+  frame_size = sizeof(frame.header) + frame.header.LEN + 1;
+  wire_.invocations[0].rx.resize(frame_size);
+  memcpy(wire_.invocations[0].rx.data(), &frame, frame_size);
+
+  frame.header.LEN = 0;
+  frame.header.NAD = kTeq1Options.host_address;
+  frame.header.PCB = TEQ1_I(0, 0);
+  frame.INF[frame.header.LEN] = teq1_compute_LRC(&frame);
+  frame_size = sizeof(frame.header) + frame.header.LEN + 1;
+  wire_.invocations[1].rx.resize(frame_size);
+  memcpy(wire_.invocations[1].rx.data(), &frame, frame_size);
+
+  const uint8_t payload[] = { 'A', 'B', 'C', 'D' };
+  uint8_t reply[5];  // Should stay empty.
+  EXPECT_EQ(0, ese_transceive(&ese_, payload, sizeof(payload), reply, sizeof(reply)));
+};
+
+TEST_F(Teq1TransceiveTest, RetransmitResyncRecovery) {
+  EXPECT_EQ(0, ese_open(&ese_, NULL));
+
+  // I(0,0) [4] ->
+  //            <- R(0, 1, 0)
+  // I(0,0) [4] ->
+  //            <- R(0, 1, 0)
+  // I(0,0) [4] ->
+  //            <- R(0, 1, 0)
+  // I(0,0) [4] ->
+  //            <- R(0, 1, 0)
+  // S(RESYNC, REQUEST) -> (retran this is another case)
+  //            <- S(RESYNC, RESPONSE)
+  // I(0, 0) [4] ->
+  //            <- I(0, 0) [0]
+  wire_.invocations.resize(6);
+  struct Teq1Frame frame;
+  size_t frame_size = 0;
+  frame.header.NAD = kTeq1Options.node_address;
+  frame.header.PCB = TEQ1_I(0, 0);
+  frame.header.LEN = 4;
+  frame.INF[0] = 'A';
+  frame.INF[1] = 'B';
+  frame.INF[2] = 'C';
+  frame.INF[3] = 'D';
+  frame.INF[frame.header.LEN] = teq1_compute_LRC(&frame);
+  frame_size = sizeof(frame.header) + frame.header.LEN + 1;
+  wire_.invocations[0].expected_tx.resize(frame_size);
+  memcpy(wire_.invocations[0].expected_tx.data(), &frame.val[0], frame_size);
+  wire_.invocations[1].expected_tx.resize(frame_size);
+  memcpy(wire_.invocations[1].expected_tx.data(), &frame.val[0], frame_size);
+  wire_.invocations[2].expected_tx.resize(frame_size);
+  memcpy(wire_.invocations[2].expected_tx.data(), &frame.val[0], frame_size);
+  wire_.invocations[3].expected_tx.resize(frame_size);
+  memcpy(wire_.invocations[3].expected_tx.data(), &frame.val[0], frame_size);
+  wire_.invocations[5].expected_tx.resize(frame_size);
+  memcpy(wire_.invocations[5].expected_tx.data(), &frame.val[0], frame_size);
+
+  frame.header.LEN = 0;
+  frame.header.NAD = kTeq1Options.node_address;
+  frame.header.PCB = TEQ1_S_RESYNC(0);
+  frame.INF[frame.header.LEN] = teq1_compute_LRC(&frame);
+  frame_size = sizeof(frame.header) + frame.header.LEN + 1;
+  wire_.invocations[4].expected_tx.resize(frame_size);
+  memcpy(wire_.invocations[4].expected_tx.data(), &frame, frame_size);
+
+  frame.header.LEN = 0;
+  frame.header.NAD = kTeq1Options.host_address;
+  frame.header.PCB = TEQ1_R(0, 1, 0);
+  frame.INF[frame.header.LEN] = teq1_compute_LRC(&frame);
+  frame_size = sizeof(frame.header) + frame.header.LEN + 1;
+  wire_.invocations[0].rx.resize(frame_size);
+  memcpy(wire_.invocations[0].rx.data(), &frame, frame_size);
+  wire_.invocations[1].rx.resize(frame_size);
+  memcpy(wire_.invocations[1].rx.data(), &frame, frame_size);
+  wire_.invocations[2].rx.resize(frame_size);
+  memcpy(wire_.invocations[2].rx.data(), &frame, frame_size);
+  wire_.invocations[3].rx.resize(frame_size);
+  memcpy(wire_.invocations[3].rx.data(), &frame, frame_size);
+
+  frame.header.LEN = 0;
+  frame.header.NAD = kTeq1Options.host_address;
+  frame.header.PCB = TEQ1_S_RESYNC(1);
+  frame.INF[frame.header.LEN] = teq1_compute_LRC(&frame);
+  frame_size = sizeof(frame.header) + frame.header.LEN + 1;
+  wire_.invocations[4].rx.resize(frame_size);
+  memcpy(wire_.invocations[4].rx.data(), &frame, frame_size);
+
+  frame.header.LEN = 0;
+  frame.header.NAD = kTeq1Options.host_address;
+  frame.header.PCB = TEQ1_I(0, 0);
+  frame.INF[frame.header.LEN] = teq1_compute_LRC(&frame);
+  frame_size = sizeof(frame.header) + frame.header.LEN + 1;
+  wire_.invocations[5].rx.resize(frame_size);
+  memcpy(wire_.invocations[5].rx.data(), &frame, frame_size);
+
+  const uint8_t payload[] = { 'A', 'B', 'C', 'D' };
+  uint8_t reply[5];  // Should stay empty.
+  EXPECT_EQ(0, ese_transceive(&ese_, payload, sizeof(payload), reply, sizeof(reply)));
+};
+
+// Error case described in b/63546784
+TEST_F(Teq1TransceiveTest, RetransmitResyncLoop) {
+  EXPECT_EQ(0, ese_open(&ese_, NULL));
+
+  // I(0,0) [4] ->
+  //            <- R(0, 1, 0)
+  // I(0,0) [4] ->
+  //            <- R(0, 1, 0)
+  // I(0,0) [4] ->
+  //            <- R(0, 1, 0)
+  // I(0,0) [4] ->
+  //            <- R(0, 1, 0)
+  // S(RESYNC, REQUEST) ->
+  //            <- S(RESYNC, RESPONSE)
+  // I(0,0) [4] ->
+  //            <- R(0, 1, 0)
+  // I(0,0) [4] ->
+  //            <- R(0, 1, 0)
+  // I(0,0) [4] ->
+  //            <- R(0, 1, 0)
+  // I(0,0) [4] ->
+  //            <- R(0, 1, 0)
+  // S(RESYNC, REQUEST) ->
+  //            <- S(RESYNC, RESPONSE)
+  // ...
+  // 6 failure loops before a reset then 6 more before a hard failure.
+  wire_.invocations.resize(5 * 12);
+  struct Teq1Frame frame;
+  size_t frame_size = 0;
+
+  frame.header.NAD = kTeq1Options.node_address;
+  frame.header.PCB = TEQ1_I(0, 0);
+  frame.header.LEN = 4;
+  frame.INF[0] = 'A';
+  frame.INF[1] = 'B';
+  frame.INF[2] = 'C';
+  frame.INF[3] = 'D';
+  frame.INF[frame.header.LEN] = teq1_compute_LRC(&frame);
+  frame_size = sizeof(frame.header) + frame.header.LEN + 1;
+  // Initialize all invocations to I/R then overwrite with resyncs.
+  for (auto &invocation : wire_.invocations) {
+    invocation.expected_tx.resize(frame_size);
+    memcpy(invocation.expected_tx.data(), &frame.val[0], frame_size);
+  }
+
+  frame.header.LEN = 0;
+  frame.header.NAD = kTeq1Options.host_address;
+  frame.header.PCB = TEQ1_R(0, 1, 0);
+  frame.INF[frame.header.LEN] = teq1_compute_LRC(&frame);
+  frame_size = sizeof(frame.header) + frame.header.LEN + 1;
+  for (auto &invocation : wire_.invocations) {
+    invocation.rx.resize(frame_size);
+    memcpy(invocation.rx.data(), &frame.val[0], frame_size);
+  }
+
+  frame.header.LEN = 0;
+  frame.header.NAD = kTeq1Options.node_address;
+  frame.header.PCB = TEQ1_S_RESYNC(0);
+  frame.INF[frame.header.LEN] = teq1_compute_LRC(&frame);
+  frame_size = sizeof(frame.header) + frame.header.LEN + 1;
+  int count = 0;
+  for (auto &invocation : wire_.invocations) {
+    if (++count % 5 == 0) {
+      invocation.expected_tx.resize(frame_size);
+      memcpy(invocation.expected_tx.data(), &frame, frame_size);
+    }
+  }
+
+  frame.header.LEN = 0;
+  frame.header.NAD = kTeq1Options.host_address;
+  frame.header.PCB = TEQ1_S_RESYNC(1);
+  frame.INF[frame.header.LEN] = teq1_compute_LRC(&frame);
+  frame_size = sizeof(frame.header) + frame.header.LEN + 1;
+  count = 0;
+  for (auto &invocation : wire_.invocations) {
+    if (++count % 5 == 0) {
+      invocation.rx.resize(frame_size);
+      memcpy(invocation.rx.data(), &frame, frame_size);
+    }
+  }
+
+  wire_.invocations[30].expect_reset = 1;
+
+  const uint8_t payload[] = { 'A', 'B', 'C', 'D' };
+  uint8_t reply[5];  // Should stay empty.
+  EXPECT_EQ(-1, ese_transceive(&ese_, payload, sizeof(payload), reply, sizeof(reply)));
+  EXPECT_NE(0, ese_error(&ese_));
 };
 
 
