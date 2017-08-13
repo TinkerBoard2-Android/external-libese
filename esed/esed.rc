@@ -8,7 +8,7 @@ on post-fs-data
     restorecon /data/vendor/ese
     start ese_load
 
-service ese_load /vendor/bin/ese_load auto
+service ese_load /vendor/bin/ese_load force
     disabled
     oneshot
     user ese
