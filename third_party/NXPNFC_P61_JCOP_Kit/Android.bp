@@ -13,7 +13,8 @@ cc_library_shared {
     ],
     cflags: [
         "-DNXP_LDR_SVC_VER_2=TRUE",
-        "-W", "-Wall",
+        "-Wall",
+        "-Werror",
         "-Wno-format",
         "-Wno-parentheses-equality",
         "-Wno-tautological-constant-out-of-range-compare",
