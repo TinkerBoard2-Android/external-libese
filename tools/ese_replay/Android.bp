@@ -20,6 +20,7 @@ cc_binary {
     srcs: ["main.c", "hw.c", "buffer.c", "payload.c"],
     shared_libs: ["liblog", "libese"],
     host_supported: true,
+    cflags: ["-Wall", "-Werror"],
     target: {
         darwin: {
             enabled: false,
