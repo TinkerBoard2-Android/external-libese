@@ -22,7 +22,11 @@ cc_library {
     local_include_dirs: [
         "include",
     ],
-    cflags: ["-std=c99"],
+    cflags: [
+        "-std=c99",
+        "-Wall",
+        "-Werror",
+    ],
     debug:  {
         cflags: ["-DLOG_NDEBUG=0"],
     },
