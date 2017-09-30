@@ -27,6 +27,11 @@ cc_library {
     ],
     local_include_dirs: ["include"],
     export_include_dirs: ["include"],
+    cflags: [
+        "-Wall",
+        "-Werror",
+        "-Wno-error=unused-variable",
+    ],
     target: {
         darwin: {
           enabled: false,
@@ -62,4 +67,9 @@ cc_library {
     name: "libese-hw-nxp-pn80t-nq-nci",
     defaults: ["pn80t_platform"],
     srcs: ["pn80t/nq_nci.c"],
+    cflags: [
+        "-Wall",
+        "-Werror",
+        "-Wno-error=unused-variable",
+    ],
 }
