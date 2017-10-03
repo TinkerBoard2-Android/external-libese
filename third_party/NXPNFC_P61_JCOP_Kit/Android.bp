@@ -14,7 +14,7 @@ cc_library_shared {
     cflags: [
         "-DNXP_LDR_SVC_VER_2=TRUE",
         "-Wall",
-        "-Werror",
+        // "-Werror", // has multiple warnings with some asan-userdebug target
         "-Wno-format",
         "-Wno-parentheses-equality",
         "-Wno-tautological-constant-out-of-range-compare",
