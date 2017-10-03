@@ -39,7 +39,7 @@ cc_library {
             srcs: ["darwin-sysdeps.c"],
         },
 
-        linux: {
+        linux_glibc: {
             srcs: ["android-sysdeps.c"],
         },
     },
