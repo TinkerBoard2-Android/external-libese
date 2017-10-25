@@ -21,6 +21,7 @@ cc_test {
     srcs: [
         "weaver_integration_tests.cpp",
     ],
+    cflags: ["-Wall", "-Werror"],
     host_supported: false,
     shared_libs: [
         "android.hardware.weaver@1.0",
