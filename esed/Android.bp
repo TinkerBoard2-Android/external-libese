@@ -14,8 +14,6 @@
 // limitations under the License.
 //
 
-subdirs = ["tests"]
-
 cc_defaults {
     name: "esed_defaults",
     proprietary: true,
