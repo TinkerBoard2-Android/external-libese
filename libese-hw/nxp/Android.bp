@@ -31,6 +31,7 @@ cc_library {
         "-Wall",
         "-Werror",
         "-Wno-error=unused-variable",
+        "-Wno-format",
     ],
     target: {
         darwin: {
@@ -61,6 +62,9 @@ cc_library {
     name: "libese-hw-nxp-pn80t-spidev",
     defaults: ["pn80t_platform"],
     srcs: ["pn80t/linux_spidev.c"],
+    cflags: [
+        "-Wno-format",
+    ],
 }
 
 cc_library {
@@ -71,5 +75,6 @@ cc_library {
         "-Wall",
         "-Werror",
         "-Wno-error=unused-variable",
+        "-Wno-format",
     ],
 }
